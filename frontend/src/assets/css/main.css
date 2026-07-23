@@ -1,0 +1,159 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOKENS — Design System BridgeKeeper Portal
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+  /* Paleta principal */
+  --color-bg:          #0d0f14;
+  --color-surface:     #141720;
+  --color-surface-2:   #1c2030;
+  --color-surface-3:   #242840;
+  --color-border:      #2e3350;
+  --color-border-glow: #4a5080;
+
+  /* Dourado / Âmbar — cor de destaque */
+  --color-gold:        #c9a84c;
+  --color-gold-light:  #e8c86a;
+  --color-gold-dim:    #7a6030;
+  --color-gold-glow:   rgba(201, 168, 76, 0.25);
+
+  /* Vermelho — perigo / erro */
+  --color-danger:      #e05c5c;
+  --color-danger-dim:  rgba(224, 92, 92, 0.15);
+
+  /* Verde — sucesso */
+  --color-success:     #4caf84;
+  --color-success-dim: rgba(76, 175, 132, 0.15);
+
+  /* Texto */
+  --color-text:        #e8e4d8;
+  --color-text-muted:  #8892a4;
+  --color-text-dim:    #545e72;
+
+  /* Tipografia */
+  --font-display:      'Cinzel', serif;
+  --font-body:         'Inter', sans-serif;
+
+  /* Espaçamentos */
+  --space-1:  0.25rem;
+  --space-2:  0.5rem;
+  --space-3:  0.75rem;
+  --space-4:  1rem;
+  --space-5:  1.25rem;
+  --space-6:  1.5rem;
+  --space-8:  2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Bordas */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  /* Sombras */
+  --shadow-sm:   0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-md:   0 4px 20px rgba(0, 0, 0, 0.5);
+  --shadow-lg:   0 8px 40px rgba(0, 0, 0, 0.6);
+  --shadow-gold: 0 0 20px rgba(201, 168, 76, 0.2);
+
+  /* Transições */
+  --transition-fast:   120ms ease;
+  --transition-normal: 220ms ease;
+  --transition-slow:   380ms ease;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   RESET & BASE
+   ══════════════════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-body);
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* Textura sutil de fundo */
+  background-image:
+    radial-gradient(ellipse at 20% 10%, rgba(201, 168, 76, 0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, rgba(74, 80, 128, 0.06) 0%, transparent 50%);
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   UTILITÁRIOS
+   ══════════════════════════════════════════════════════════════════════════ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+/* Divisor ornamental */
+.ornament-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  color: var(--color-text-dim);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: var(--space-6) 0;
+}
+.ornament-divider::before,
+.ornament-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--color-border), transparent);
+}
+
+/* Scrollbar customizada */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover { background: var(--color-gold-dim); }
+
+/* Fade transition global */
+.fade-enter-active,
+.fade-leave-active { transition: opacity var(--transition-normal); }
+.fade-enter-from,
+.fade-leave-to { opacity: 0; }
+
+/* Slide-up */
+.slide-up-enter-active {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.slide-up-enter-from {
+  opacity: 0;
+  transform: translateY(16px);
+}
