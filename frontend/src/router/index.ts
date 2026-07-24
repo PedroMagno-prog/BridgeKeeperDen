@@ -1,42 +1,69 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import LoginView from '../views/LoginView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import CodexView from '../views/CodexView.vue'
+import ArticleDetailView from '../views/ArticleDetailView.vue'
+import MapView from '../views/MapView.vue'
+import TimelineView from '../views/TimelineView.vue'
+import ManuscriptsView from '../views/ManuscriptsView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
     {
       path: '/',
-      redirect: '/login',
+      redirect: '/dashboard',
     },
     {
       path: '/login',
       name: 'login',
-      component: () => import('@/views/LoginView.vue'),
-      meta: { public: true },
+      component: LoginView,
     },
     {
-      path: '/personagens',
-      name: 'personagens',
-      component: () => import('@/views/PersonagensView.vue'),
+      path: '/dashboard',
+      name: 'dashboard',
+      component: DashboardView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/worlds/:worldId/codex',
+      name: 'codex',
+      component: CodexView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/worlds/:worldId/codex/:articleId',
+      name: 'article-detail',
+      component: ArticleDetailView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/worlds/:worldId/maps',
+      name: 'maps',
+      component: MapView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/worlds/:worldId/timeline',
+      name: 'timeline',
+      component: TimelineView,
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/worlds/:worldId/manuscripts',
+      name: 'manuscripts',
+      component: ManuscriptsView,
       meta: { requiresAuth: true },
     },
   ],
 })
 
-// ── Navigation Guard ──────────────────────────────────────────────────────
-router.beforeEach(async (to) => {
-  const auth = useAuthStore()
-
-  // Rota protegida: usuário não autenticado → redireciona para login
-  if (to.meta.requiresAuth && !auth.isLoggedIn) {
-    // Tenta recarregar o usuário do token persistido antes de redirecionar
-    await auth.fetchMe()
-    if (!auth.isLoggedIn) return { name: 'login' }
-  }
-
-  // Rota pública: usuário já logado → redireciona para personagens
-  if (to.meta.public && auth.isLoggedIn) {
-    return { name: 'personagens' }
+router.beforeEach((to, from, next) => {
+  const token = localStorage.getItem('token')
+  if (to.meta.requiresAuth && !token) {
+    next('/login')
+  } else {
+    next()
   }
 })
 

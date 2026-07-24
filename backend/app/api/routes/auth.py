@@ -1,53 +1,28 @@
-"""Rotas de autenticação: login e cadastro."""
-from __future__ import annotations
-
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.database import get_db
-from app.core.security import criar_access_token, verificar_senha
-from app.schemas.usuario import LoginInput, TokenOut, UsuarioCreate, UsuarioOut
-from app.services import usuario_service
-from app.services.usuario_service import EmailJaCadastradoError
+from app.api.deps.auth import get_current_user
+from app.db.models.user import User
+from app.schemas.auth import UserRegister, UserLogin, Token, UserResponse
+from app.services import auth_service
 
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenOut, summary="Login com e-mail e senha")
-async def login(body: LoginInput, db: AsyncSession = Depends(get_db)):
-    usuario = await usuario_service.buscar_por_email(db, body.email)
-
-    if not usuario or not verificar_senha(body.senha, usuario.senha):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="E-mail ou senha incorretos.",
-        )
-
-    token = criar_access_token({"sub": str(usuario.id)})
-    return TokenOut(
-        access_token=token,
-        usuario=UsuarioOut.model_validate(usuario),
-    )
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
+    """Cria uma nova conta de usuário."""
+    return await auth_service.register_user(db, data)
 
 
-@router.post(
-    "/cadastro",
-    response_model=TokenOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Cria nova conta e retorna token",
-)
-async def cadastro(body: UsuarioCreate, db: AsyncSession = Depends(get_db)):
-    try:
-        usuario = await usuario_service.criar_usuario(
-            db, body.nome, body.email, body.senha
-        )
-        await db.commit()
-        await db.refresh(usuario)
-    except EmailJaCadastradoError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+@router.post("/login", response_model=Token)
+async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+    """Autentica o usuário e retorna o token JWT."""
+    return await auth_service.authenticate_user(db, data)
 
-    token = criar_access_token({"sub": str(usuario.id)})
-    return TokenOut(
-        access_token=token,
-        usuario=UsuarioOut.model_validate(usuario),
-    )
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(user: User = Depends(get_current_user)):
+    """Obtém os dados do usuário logado."""
+    return user

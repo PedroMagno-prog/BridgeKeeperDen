@@ -1,7 +1,3 @@
-Entendido! O escopo foi refinado de forma muito clara e pragmática. Eliminamos o peso de *features* desnecessárias (como centenas de templates rígidos, gráficos de diplomacia e mídias pesadas) e focamos no núcleo funcional: **Artigos modulares, Mapas Interativos, Timeline orientada a dados, Névoa de Guerra (Fog of War) granular e Menções `@**`.
-
-Para mantermos a documentação organizada e profissional, dividiremos o projeto em **4 Documentos Principais**:
-
 1. **Documento 01: Especificação de Requisitos e Regras de Negócio (SRS)** *(Este documento)*
 2. **Documento 02: Modelagem de Dados e Banco de Dados (ERD / SQL Schema)**
 3. **Documento 03: Arquitetura do Sistema e Endpoints de API (Backend & Frontend)**
@@ -110,13 +106,3 @@ Cada recurso (Artigo, Marcador de Mapa, Capítulo) possui uma propriedade obriga
 * **RNF-01 (Custo e Armazenamento):** O sistema deve otimizar o uso de armazenamento. Imagens enviadas para mapas devem ser comprimidas automaticamente no upload (conversão para formato WebP ou JPEG otimizado).
 * **RNF-02 (Performance de Renderização):** A renderização dos marcadores no mapa deve ser eficiente (utilizando Canvas 2D ou manipulação otimizada de SVG/DOM via bibliotecas como Leaflet.js).
 * **RNF-03 (Segurança de Dados no Fog of War):** Os dados de artigos/pins com status **Visão Nula** **NÃO devem ser enviados** nas requisições JSON da API para usuários com papel *JOGADOR*. A filtragem deve ocorrer estritamente no *Backend* e nunca apenas ocultada via CSS no *Frontend*.
-
----
-
-### O que faremos a seguir?
-
-Com os requisitos e regras de negócio consolidados no **Documento 01**, o próximo passo é o **Documento 02: Modelagem de Dados e Banco de Dados**.
-
-Neste próximo documento, estruturaremos as tabelas do banco de dados (ex: `Worlds`, `Articles`, `ArticleSections`, `Maps`, `MapPins`, `TimelineEras`, `Users`) com suas devidas chaves primárias, estrangeiras, índices e tipos de dados.
-
-Podemos prosseguir para o **Documento 02**?
