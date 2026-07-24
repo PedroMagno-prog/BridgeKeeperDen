@@ -14,10 +14,15 @@ export async function apiFetch<T>(
     headers['Authorization'] = `Bearer ${token}`
   }
 
-  const response = await fetch(`${BASE_URL}${endpoint}`, {
-    ...options,
-    headers,
-  })
+  let response: Response
+  try {
+    response = await fetch(`${BASE_URL}${endpoint}`, {
+      ...options,
+      headers,
+    })
+  } catch (err: any) {
+    throw new Error('Não foi possível conectar ao servidor backend (offline ou erro de rede).')
+  }
 
   if (response.status === 401) {
     localStorage.removeItem('token')
@@ -27,8 +32,24 @@ export async function apiFetch<T>(
   }
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}))
-    throw new Error(errorData.detail || 'Ocorreu um erro na requisição.')
+    const errorData = await response.json().catch(() => null)
+    let message = 'Ocorreu um erro na requisição.'
+
+    if (errorData && errorData.detail) {
+      if (typeof errorData.detail === 'string') {
+        message = errorData.detail
+      } else if (Array.isArray(errorData.detail)) {
+        message = errorData.detail.map((errItem: any) => errItem.msg || JSON.stringify(errItem)).join('; ')
+      } else if (typeof errorData.detail === 'object') {
+        message = JSON.stringify(errorData.detail)
+      }
+    } else if (response.status === 502 || response.status === 504) {
+      message = 'O servidor backend (port 8000) está inacessível (502/504 Gateway Error).'
+    } else if (response.statusText) {
+      message = `Erro ${response.status}: ${response.statusText}`
+    }
+
+    throw new Error(message)
   }
 
   if (response.status === 204) {
