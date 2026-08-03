@@ -145,8 +145,11 @@ async def atualizar_artigo(
     )
     await db.commit()
 
-    # article.tags e article.sections ja estao atualizados na identity map
-    return sanitize_article_detail(article, ctx.role)
+    # populate_existing=True força re-populacao da identity map com dados frescos do banco
+    loaded = await article_service.buscar_artigo(
+        db, article_id, ctx.world_id, populate_existing=True
+    )
+    return sanitize_article_detail(loaded, ctx.role)
 
 
 # ── DELETE /worlds/{world_id}/articles/{article_id} ──────────────────────────

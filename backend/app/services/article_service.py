@@ -115,6 +115,7 @@ async def buscar_artigo(
     db: AsyncSession,
     article_id: uuid.UUID,
     world_id: uuid.UUID,
+    populate_existing: bool = False,
 ) -> Article | None:
     """Busca um artigo com sections, tags e inventory carregados."""
     stmt = (
@@ -126,6 +127,8 @@ async def buscar_artigo(
         )
         .where(Article.id == article_id, Article.world_id == world_id)
     )
+    if populate_existing:
+        stmt = stmt.execution_options(populate_existing=True)
     result = await db.execute(stmt)
     return result.scalar_one_or_none()
 
@@ -153,32 +156,26 @@ async def atualizar_artigo(
     if in_game_sort_order is not ...:
         article.in_game_sort_order = in_game_sort_order
 
-    # Replace tags — usa ORM-level delete para manter a identity map sincronizada
+    # Replace tags — deleta via ORM para remover da identity map, depois insere novos
     if tags is not None:
         for tag in list(article.tags):
             await db.delete(tag)
         await db.flush()
-        article.tags.clear()
         for tag_name in tags:
-            new_tag = ArticleTag(article_id=article.id, name=tag_name)
-            db.add(new_tag)
-            article.tags.append(new_tag)
+            db.add(ArticleTag(article_id=article.id, name=tag_name))
 
     # Replace sections — mesma estrategia
     if sections is not None:
         for section in list(article.sections):
             await db.delete(section)
         await db.flush()
-        article.sections.clear()
         for sec_data in sections:
-            new_sec = ArticleSection(
+            db.add(ArticleSection(
                 article_id=article.id,
                 title=sec_data["title"],
                 content=sec_data.get("content", ""),
                 order_index=sec_data.get("order_index", 0),
-            )
-            db.add(new_sec)
-            article.sections.append(new_sec)
+            ))
 
     await db.flush()
     return article
