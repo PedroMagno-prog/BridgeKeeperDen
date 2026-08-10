@@ -12,12 +12,42 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
-      meta: { public: true },
+      meta: { public: true, fullscreen: true },
     },
     {
-      path: '/personagens',
-      name: 'personagens',
-      component: () => import('@/views/PersonagensView.vue'),
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/DashboardView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/codex',
+      name: 'codex',
+      component: () => import('@/views/CodexView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/codex/:id',
+      name: 'codex-detail',
+      component: () => import('@/views/CodexView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/maps',
+      name: 'maps',
+      component: () => import('@/views/MapsView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/timeline',
+      name: 'timeline',
+      component: () => import('@/views/TimelineView.vue'),
+      meta: { requiresAuth: true },
+    },
+    {
+      path: '/manuscripts',
+      name: 'manuscripts',
+      component: () => import('@/views/ManuscriptsView.vue'),
       meta: { requiresAuth: true },
     },
   ],
@@ -34,9 +64,9 @@ router.beforeEach(async (to) => {
     if (!auth.isLoggedIn) return { name: 'login' }
   }
 
-  // Rota pública: usuário já logado → redireciona para personagens
+  // Rota pública: usuário já logado → redireciona para dashboard
   if (to.meta.public && auth.isLoggedIn) {
-    return { name: 'personagens' }
+    return { name: 'dashboard' }
   }
 })
 

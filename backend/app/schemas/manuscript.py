@@ -24,6 +24,15 @@ class ChapterCreate(BaseModel):
     visibility: VisibilityType | None = None  # default depende do role
 
 
+class ChapterUpdate(BaseModel):
+    """Input para atualizacao parcial de um capitulo."""
+    title: str | None = Field(None, min_length=1, max_length=150)
+    content: str | None = Field(None, max_length=100_000)
+    order_index: int | None = Field(None, ge=0)
+    visibility: VisibilityType | None = None
+
+
+
 # ── Outputs ───────────────────────────────────────────────────────────────────
 
 class ManuscriptOut(BaseModel):

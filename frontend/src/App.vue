@@ -1,9 +1,22 @@
 <script setup lang="ts">
-import { RouterView } from 'vue-router'
+import { computed } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
+import AppShell from '@/components/ui/AppShell.vue'
+import DiceRoller from '@/components/ui/DiceRoller.vue'
+
+const route = useRoute()
+const isAuthPage = computed(() => route.meta?.public === true)
 </script>
 
 <template>
-  <RouterView />
+  <!-- Auth pages: sem shell -->
+  <RouterView v-if="isAuthPage" />
+
+  <!-- App pages: com shell completo -->
+  <AppShell v-else>
+    <RouterView />
+    <DiceRoller />
+  </AppShell>
 </template>
 
 <style>

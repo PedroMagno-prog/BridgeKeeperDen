@@ -35,7 +35,7 @@ async function handleLogin() {
   if (!validateLogin()) return
   try {
     await auth.login(loginEmail.value, loginSenha.value)
-    router.push('/personagens')
+    router.push('/dashboard')
   } catch { /* error já está em auth.error */ }
 }
 
@@ -65,8 +65,8 @@ function validateCadastro(): boolean {
 async function handleCadastro() {
   if (!validateCadastro()) return
   try {
-    await auth.cadastrar(cadNome.value.trim(), cadEmail.value, cadSenha.value)
-    router.push('/personagens')
+    await auth.register(cadNome.value.trim(), cadEmail.value, cadSenha.value)
+    router.push('/dashboard')
   } catch { /* error já está em auth.error */ }
 }
 

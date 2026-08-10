@@ -1,0 +1,420 @@
+<script setup lang="ts">
+/**
+ * TELA 2 + TELA 3: Codex — Lista + Detalhe + Edição de Artigos
+ */
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { useArticlesStore, type Article, type Visibility } from '@/stores/articles'
+import { useWorldsStore } from '@/stores/worlds'
+import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
+
+const route = useRoute()
+const router = useRouter()
+const articlesStore = useArticlesStore()
+const worldsStore = useWorldsStore()
+
+const searchInput = ref('')
+const activeTag = ref('')
+const showCreateModal = ref(false)
+const showEditModal = ref(false)
+const showDetail = ref(false)
+
+const isMestre = computed(() => worldsStore.isMestre)
+
+// ── Novo artigo ──────────────────────────────────────────────────────────────
+const newTitle = ref('')
+const newVisibility = ref<Visibility>('NULA')
+const newTags = ref('')
+const newInGameDate = ref('')
+const newSections = ref([{ title: '', content: '' }])
+const creating = ref(false)
+
+// ── Editar artigo ────────────────────────────────────────────────────────────
+const editTitle = ref('')
+const editVisibility = ref<Visibility>('NULA')
+const editTags = ref('')
+const editInGameDate = ref('')
+const editSections = ref<{ title: string; content: string }[]>([])
+const editInGameSortOrder = ref<number | null>(null)
+const saving = ref(false)
+
+const allTags = computed(() => {
+  const s = new Set<string>()
+  articlesStore.articles.forEach((a) => a.tags?.forEach((t) => s.add(t)))
+  return Array.from(s).sort()
+})
+
+onMounted(async () => {
+  await articlesStore.fetchArticles()
+  if (route.params.id) openArticle(route.params.id as string)
+})
+
+watch(() => route.params.id, (id) => {
+  if (id) openArticle(id as string)
+  else { showDetail.value = false; articlesStore.current = null }
+})
+
+function search() {
+  articlesStore.searchQuery = searchInput.value
+  articlesStore.tagFilter = activeTag.value
+  articlesStore.fetchArticles()
+}
+
+function toggleTag(tag: string) {
+  activeTag.value = activeTag.value === tag ? '' : tag
+  search()
+}
+
+async function openArticle(id: string) {
+  const a = await articlesStore.fetchArticle(id)
+  if (a) showDetail.value = true
+}
+
+function selectArticle(article: Article) {
+  if (article.is_locked) return
+  router.push(`/codex/${article.id}`)
+}
+
+// ── Criar ────────────────────────────────────────────────────────────────────
+async function handleCreate() {
+  if (!newTitle.value.trim()) return
+  creating.value = true
+  try {
+    const tags = newTags.value.split(',').map((t) => t.trim()).filter(Boolean)
+    const sections = newSections.value
+      .filter((s) => s.title.trim())
+      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
+    await articlesStore.createArticle({
+      title: newTitle.value.trim(),
+      visibility: newVisibility.value,
+      tags,
+      sections,
+      in_game_date: newInGameDate.value || null,
+    } as any)
+    showCreateModal.value = false
+    resetCreateForm()
+  } finally { creating.value = false }
+}
+
+function resetCreateForm() {
+  newTitle.value = ''; newVisibility.value = 'NULA'; newTags.value = ''
+  newInGameDate.value = ''; newSections.value = [{ title: '', content: '' }]
+}
+
+function addCreateSection() { newSections.value.push({ title: '', content: '' }) }
+
+// ── Editar ───────────────────────────────────────────────────────────────────
+function openEditModal() {
+  const a = articlesStore.current
+  if (!a) return
+  editTitle.value = a.title
+  editVisibility.value = a.visibility
+  editTags.value = a.tags?.join(', ') ?? ''
+  editInGameDate.value = a.in_game_date ?? ''
+  editInGameSortOrder.value = a.in_game_sort_order ?? null
+  editSections.value = (a.sections ?? []).map((s) => ({ title: s.title, content: s.content }))
+  if (editSections.value.length === 0) editSections.value.push({ title: '', content: '' })
+  showEditModal.value = true
+}
+
+function addEditSection() { editSections.value.push({ title: '', content: '' }) }
+function removeEditSection(i: number) { editSections.value.splice(i, 1) }
+
+async function handleSave() {
+  const a = articlesStore.current
+  if (!a) return
+  saving.value = true
+  try {
+    const tags = editTags.value.split(',').map((t) => t.trim()).filter(Boolean)
+    const sections = editSections.value
+      .filter((s) => s.title.trim())
+      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
+    await articlesStore.updateArticle(a.id, {
+      title: editTitle.value.trim(),
+      visibility: editVisibility.value,
+      tags,
+      sections,
+      in_game_date: editInGameDate.value || null,
+      in_game_sort_order: editInGameSortOrder.value,
+    } as any)
+    showEditModal.value = false
+  } finally { saving.value = false }
+}
+
+// ── Deletar ──────────────────────────────────────────────────────────────────
+async function handleDelete(id: string) {
+  if (!confirm('Remover este artigo permanentemente?')) return
+  await articlesStore.deleteArticle(id)
+  router.push('/codex')
+}
+
+function backToList() {
+  showDetail.value = false
+  articlesStore.current = null
+  router.push('/codex')
+}
+
+function formatDate(iso: string) {
+  return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+</script>
+
+<template>
+  <div class="codex" :class="{ 'codex--detail-open': showDetail }">
+    <!-- ═══ LISTA DE ARTIGOS ═══ -->
+    <div class="codex__list">
+      <div class="codex__toolbar">
+        <h2 class="codex__title">Codex</h2>
+        <button v-if="isMestre" class="btn-gold-sm" @click="showCreateModal = true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo
+        </button>
+      </div>
+
+      <div class="search-bar">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input v-model="searchInput" type="text" placeholder="Buscar artigos..." class="search-bar__input" @keydown.enter="search" />
+      </div>
+
+      <div v-if="allTags.length" class="tag-pills">
+        <button v-for="tag in allTags" :key="tag" class="tag-pill" :class="{ 'tag-pill--active': activeTag === tag }" @click="toggleTag(tag)">{{ tag }}</button>
+      </div>
+
+      <div class="article-list">
+        <div v-if="articlesStore.loading" class="list-empty">Carregando...</div>
+        <div v-else-if="articlesStore.articles.length === 0" class="list-empty">Nenhum artigo encontrado.</div>
+        <button
+          v-else v-for="article in articlesStore.articles" :key="article.id"
+          class="article-row" :class="{ 'article-row--locked': article.is_locked, 'article-row--active': articlesStore.current?.id === article.id }"
+          @click="selectArticle(article)"
+        >
+          <div class="article-row__main">
+            <span class="article-row__title">
+              {{ article.title }}
+              <span v-if="article.is_locked" class="lock-icon">?</span>
+            </span>
+            <span v-if="article.in_game_date" class="article-row__date">{{ article.in_game_date }}</span>
+          </div>
+          <div class="article-row__meta">
+            <span v-for="tag in article.tags" :key="tag" class="tag-inline">{{ tag }}</span>
+            <VisibilityBadge v-if="isMestre" :visibility="article.visibility" />
+          </div>
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══ DETALHE DO ARTIGO ═══ -->
+    <Transition name="slide-right">
+      <div v-if="showDetail && articlesStore.current" class="codex__detail">
+        <div class="detail-header">
+          <button class="back-btn" @click="backToList">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <h1 class="detail-title">{{ articlesStore.current.title }}</h1>
+          <div class="detail-actions">
+            <VisibilityBadge v-if="isMestre" :visibility="articlesStore.current.visibility" size="md" />
+            <button v-if="isMestre" class="btn-icon" title="Editar" @click="openEditModal">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+              </svg>
+            </button>
+            <button v-if="isMestre" class="btn-icon btn-icon--danger" title="Deletar" @click="handleDelete(articlesStore.current.id)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="detail-meta">
+          <div v-if="articlesStore.current.in_game_date" class="meta-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-dim)" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            {{ articlesStore.current.in_game_date }}
+          </div>
+          <div class="meta-tags">
+            <span v-for="tag in articlesStore.current.tags" :key="tag" class="tag-inline tag-inline--lg">{{ tag }}</span>
+          </div>
+          <span class="meta-date">Atualizado: {{ formatDate(articlesStore.current.updated_at) }}</span>
+        </div>
+
+        <div class="detail-sections">
+          <div v-for="section in articlesStore.current.sections" :key="section.id" class="section-block">
+            <h3 class="section-block__title">{{ section.title }}</h3>
+            <div class="section-block__content">{{ section.content }}</div>
+          </div>
+          <div v-if="!articlesStore.current.sections?.length" class="list-empty" style="padding: 2rem;">Sem seções.</div>
+        </div>
+
+        <div v-if="articlesStore.current.inventory_items?.length" class="inventory-panel">
+          <div class="ornament-divider">Inventário</div>
+          <table class="inv-table">
+            <thead><tr><th>Item</th><th>Qtd</th><th>Descrição</th></tr></thead>
+            <tbody>
+              <tr v-for="item in articlesStore.current.inventory_items" :key="item.id">
+                <td>{{ item.item_name }}</td>
+                <td class="inv-qty">{{ item.quantity }}</td>
+                <td class="inv-desc">{{ item.description ?? '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- ═══ MODAL CRIAR ARTIGO ═══ -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
+          <div class="modal modal--wide" @click.stop>
+            <h3 class="modal__title">Novo Artigo</h3>
+            <div class="form-row">
+              <div class="form-group form-group--flex"><label>Título</label><input v-model="newTitle" type="text" class="form-input" placeholder="Nome do artigo" autofocus /></div>
+              <div class="form-group" style="width:140px;"><label>Visibilidade</label><select v-model="newVisibility" class="form-input"><option value="NULA">Nula</option><option value="PARCIAL">Parcial</option><option value="TOTAL">Total</option></select></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="newTags" type="text" class="form-input" placeholder=".Local, .NPC" /></div>
+              <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="newInGameDate" type="text" class="form-input" placeholder="1200 D.C." /></div>
+            </div>
+            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
+            <div v-for="(sec, i) in newSections" :key="i" class="section-form">
+              <input v-model="sec.title" type="text" class="form-input" :placeholder="`Título da seção ${i + 1}`" />
+              <textarea v-model="sec.content" class="form-input" placeholder="Conteúdo..." rows="3" />
+            </div>
+            <button class="btn-link" @click="addCreateSection">+ Seção</button>
+            <div class="modal__actions"><button class="btn btn--ghost" @click="showCreateModal = false">Cancelar</button><button class="btn btn--gold" @click="handleCreate" :disabled="creating || !newTitle.trim()">{{ creating ? 'Criando...' : 'Criar' }}</button></div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- ═══ MODAL EDITAR ARTIGO ═══ -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
+          <div class="modal modal--wide" @click.stop>
+            <h3 class="modal__title">Editar Artigo</h3>
+            <div class="form-row">
+              <div class="form-group form-group--flex"><label>Título</label><input v-model="editTitle" type="text" class="form-input" autofocus /></div>
+              <div class="form-group" style="width:140px;"><label>Visibilidade</label><select v-model="editVisibility" class="form-input"><option value="NULA">Nula</option><option value="PARCIAL">Parcial</option><option value="TOTAL">Total</option></select></div>
+            </div>
+            <div class="form-row">
+              <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="editTags" type="text" class="form-input" /></div>
+              <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="editInGameDate" type="text" class="form-input" /></div>
+            </div>
+            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
+            <div v-for="(sec, i) in editSections" :key="i" class="section-form">
+              <div class="section-form__header">
+                <input v-model="sec.title" type="text" class="form-input" :placeholder="`Seção ${i + 1}`" />
+                <button class="section-remove" title="Remover seção" @click="removeEditSection(i)">×</button>
+              </div>
+              <textarea v-model="sec.content" class="form-input form-input--tall" placeholder="Conteúdo da seção..." rows="5" />
+            </div>
+            <button class="btn-link" @click="addEditSection">+ Adicionar Seção</button>
+            <div class="modal__actions">
+              <button class="btn btn--ghost" @click="showEditModal = false">Cancelar</button>
+              <button class="btn btn--gold" @click="handleSave" :disabled="saving || !editTitle.trim()">{{ saving ? 'Salvando...' : 'Salvar Alterações' }}</button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+  </div>
+</template>
+
+<style scoped>
+.codex { display: flex; gap: 0; height: calc(100vh - 56px); margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-8)); }
+
+/* Lista */
+.codex__list { width: 380px; min-width: 300px; border-right: 1px solid var(--color-border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+.codex--detail-open .codex__list { width: 340px; }
+.codex__toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
+.codex__title { font-family: var(--font-display); font-size: 1.1rem; color: var(--color-gold); }
+.btn-gold-sm { display: flex; align-items: center; gap: var(--space-1); padding: 6px 12px; background: var(--color-gold); color: #0d0f14; border: none; border-radius: var(--radius-sm); font-family: var(--font-body); font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all var(--transition-fast); }
+.btn-gold-sm:hover { background: var(--color-gold-light); box-shadow: var(--shadow-gold); }
+
+.search-bar { display: flex; align-items: center; gap: var(--space-2); margin: var(--space-3) var(--space-4); padding: var(--space-2) var(--space-3); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text-dim); }
+.search-bar:focus-within { border-color: var(--color-gold-dim); }
+.search-bar__input { flex: 1; background: none; border: none; outline: none; color: var(--color-text); font-family: var(--font-body); font-size: 0.8rem; }
+.search-bar__input::placeholder { color: var(--color-text-dim); }
+
+.tag-pills { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 var(--space-4) var(--space-3); }
+.tag-pill { padding: 3px 10px; border-radius: 14px; background: var(--color-surface-2); border: 1px solid var(--color-border); color: var(--color-text-muted); font-size: 0.7rem; cursor: pointer; font-family: var(--font-body); transition: all var(--transition-fast); }
+.tag-pill:hover { border-color: var(--color-gold-dim); color: var(--color-gold); }
+.tag-pill--active { background: var(--color-gold-glow); border-color: var(--color-gold-dim); color: var(--color-gold); }
+
+.article-list { flex: 1; overflow-y: auto; }
+.article-row { display: flex; flex-direction: column; gap: var(--space-1); width: 100%; padding: var(--space-3) var(--space-4); border: none; border-bottom: 1px solid var(--color-border); background: none; cursor: pointer; text-align: left; font-family: var(--font-body); color: var(--color-text); transition: background var(--transition-fast); }
+.article-row:hover { background: var(--color-surface); }
+.article-row--active { background: var(--color-surface-2); border-left: 3px solid var(--color-gold); }
+.article-row--locked { opacity: 0.6; cursor: default; }
+.article-row__main { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.article-row__title { font-size: 0.875rem; font-weight: 500; display: flex; align-items: center; gap: 6px; }
+.lock-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border-radius: 50%; background: var(--color-gold-glow); color: var(--color-gold); font-size: 0.65rem; font-weight: 700; }
+.article-row__date { font-size: 0.7rem; color: var(--color-text-dim); white-space: nowrap; }
+.article-row__meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.tag-inline { font-size: 0.6rem; padding: 1px 6px; border-radius: 8px; background: var(--color-surface-2); color: var(--color-text-muted); }
+.tag-inline--lg { font-size: 0.7rem; padding: 2px 8px; }
+
+/* Detail */
+.codex__detail { flex: 1; overflow-y: auto; padding: var(--space-6) var(--space-8); animation: slideIn 0.25s ease; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
+.detail-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
+.back-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: none; color: var(--color-text-muted); cursor: pointer; transition: all var(--transition-fast); }
+.back-btn:hover { border-color: var(--color-gold-dim); color: var(--color-gold); }
+.detail-title { flex: 1; font-family: var(--font-display); font-size: 1.5rem; color: var(--color-text); }
+.detail-actions { display: flex; align-items: center; gap: var(--space-2); }
+.btn-icon { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: none; color: var(--color-text-muted); cursor: pointer; transition: all var(--transition-fast); }
+.btn-icon:hover { border-color: var(--color-gold-dim); color: var(--color-gold); }
+.btn-icon--danger:hover { border-color: var(--color-danger); color: var(--color-danger); }
+
+.detail-meta { display: flex; align-items: center; gap: var(--space-4); margin-bottom: var(--space-6); flex-wrap: wrap; }
+.meta-item { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--color-text-muted); }
+.meta-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.meta-date { font-size: 0.7rem; color: var(--color-text-dim); margin-left: auto; }
+
+.detail-sections { display: flex; flex-direction: column; gap: var(--space-5); }
+.section-block { padding: var(--space-5); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-md); }
+.section-block__title { font-size: 0.9rem; font-weight: 600; color: var(--color-gold); margin-bottom: var(--space-3); }
+.section-block__content { font-size: 0.875rem; line-height: 1.7; color: var(--color-text); white-space: pre-wrap; }
+
+.inventory-panel { margin-top: var(--space-6); }
+.inv-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+.inv-table th { text-align: left; padding: var(--space-2) var(--space-3); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--color-text-dim); border-bottom: 1px solid var(--color-border); }
+.inv-table td { padding: var(--space-2) var(--space-3); border-bottom: 1px solid var(--color-border); }
+.inv-qty { font-weight: 600; color: var(--color-gold); text-align: center; width: 50px; }
+.inv-desc { color: var(--color-text-muted); font-size: 0.75rem; }
+
+.list-empty { padding: var(--space-8); text-align: center; color: var(--color-text-dim); font-size: 0.85rem; }
+
+/* ═══ Modal ═══ */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 300; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
+.modal { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); padding: var(--space-8); width: 100%; max-width: 440px; box-shadow: var(--shadow-lg); }
+.modal--wide { max-width: 660px; max-height: 85vh; overflow-y: auto; }
+.modal__title { font-size: 1.1rem; font-weight: 600; color: var(--color-gold); margin-bottom: var(--space-6); }
+.form-row { display: flex; gap: var(--space-4); }
+.form-group { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-4); }
+.form-group--flex { flex: 1; }
+.form-group label { font-size: 0.75rem; color: var(--color-text-muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.form-input { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); font-family: var(--font-body); font-size: 0.85rem; padding: var(--space-2) var(--space-3); resize: none; transition: border-color var(--transition-fast); }
+.form-input:focus { outline: none; border-color: var(--color-gold-dim); }
+.form-input--tall { min-height: 120px; line-height: 1.6; }
+.section-form { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-3); padding: var(--space-3); background: var(--color-bg); border: 1px solid var(--color-border); border-radius: var(--radius-sm); }
+.section-form__header { display: flex; gap: var(--space-2); align-items: center; }
+.section-form__header .form-input { flex: 1; }
+.section-remove { width: 28px; height: 28px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: none; color: var(--color-danger); cursor: pointer; font-size: 1rem; display: flex; align-items: center; justify-content: center; transition: all var(--transition-fast); }
+.section-remove:hover { border-color: var(--color-danger); background: var(--color-danger-dim); }
+.btn-link { background: none; border: none; color: var(--color-gold); font-family: var(--font-body); font-size: 0.8rem; cursor: pointer; text-align: left; padding: 0; }
+.btn-link:hover { text-decoration: underline; }
+.modal__actions { display: flex; gap: var(--space-3); justify-content: flex-end; margin-top: var(--space-6); }
+.btn { padding: var(--space-2) var(--space-5); border-radius: var(--radius-sm); border: none; font-family: var(--font-body); font-size: 0.875rem; font-weight: 500; cursor: pointer; transition: all var(--transition-fast); }
+.btn--ghost { background: none; border: 1px solid var(--color-border); color: var(--color-text-muted); }
+.btn--ghost:hover { border-color: var(--color-text-muted); color: var(--color-text); }
+.btn--gold { background: var(--color-gold); color: #0d0f14; font-weight: 600; }
+.btn--gold:hover { background: var(--color-gold-light); box-shadow: var(--shadow-gold); }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.slide-right-enter-active { transition: all 0.3s ease; }
+.slide-right-enter-from { opacity: 0; transform: translateX(20px); }
+</style>

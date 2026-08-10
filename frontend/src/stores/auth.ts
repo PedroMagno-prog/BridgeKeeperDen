@@ -1,19 +1,20 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { api } from '@/api/client'
 
-export interface Usuario {
-  id: number
-  nome: string
+export interface User {
+  id: string
+  username: string
   email: string
 }
 
 export const useAuthStore = defineStore('auth', () => {
-  const usuario = ref<Usuario | null>(null)
+  const user = ref<User | null>(null)
   const token = ref<string | null>(localStorage.getItem('bk_token'))
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const isLoggedIn = computed(() => !!token.value && !!usuario.value)
+  const isLoggedIn = computed(() => !!token.value && !!user.value)
 
   function setToken(t: string) {
     token.value = t
@@ -21,57 +22,36 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   function clearSession() {
-    usuario.value = null
+    user.value = null
     token.value = null
     localStorage.removeItem('bk_token')
+    localStorage.removeItem('bk_active_world')
   }
 
-  function authHeaders(): Record<string, string> {
-    return token.value ? { Authorization: `Bearer ${token.value}` } : {}
-  }
-
-  async function login(email: string, senha: string) {
+  async function login(email: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/v1/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, senha }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.detail ?? 'E-mail ou senha inválidos.')
-      }
-      const data = await res.json()
+      const { data } = await api.post('/auth/login', { email, password })
       setToken(data.access_token)
-      usuario.value = data.usuario
-    } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Erro desconhecido.'
+      user.value = data.user
+    } catch (e: any) {
+      error.value = e.response?.data?.detail ?? 'E-mail ou senha inválidos.'
       throw e
     } finally {
       loading.value = false
     }
   }
 
-  async function cadastrar(nome: string, email: string, senha: string) {
+  async function register(username: string, email: string, password: string) {
     loading.value = true
     error.value = null
     try {
-      const res = await fetch('/api/v1/auth/cadastro', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nome, email, senha }),
-      })
-      if (!res.ok) {
-        const data = await res.json()
-        throw new Error(data.detail ?? 'Erro ao criar conta.')
-      }
-      const data = await res.json()
+      const { data } = await api.post('/auth/register', { username, email, password })
       setToken(data.access_token)
-      usuario.value = data.usuario
-    } catch (e: unknown) {
-      error.value = e instanceof Error ? e.message : 'Erro desconhecido.'
+      user.value = data.user
+    } catch (e: any) {
+      error.value = e.response?.data?.detail ?? 'Erro ao criar conta.'
       throw e
     } finally {
       loading.value = false
@@ -81,9 +61,8 @@ export const useAuthStore = defineStore('auth', () => {
   async function fetchMe() {
     if (!token.value) return
     try {
-      const res = await fetch('/api/v1/usuarios/me', { headers: authHeaders() })
-      if (!res.ok) { clearSession(); return }
-      usuario.value = await res.json()
+      const { data } = await api.get('/users/me')
+      user.value = data
     } catch {
       clearSession()
     }
@@ -91,5 +70,5 @@ export const useAuthStore = defineStore('auth', () => {
 
   function logout() { clearSession() }
 
-  return { usuario, token, loading, error, isLoggedIn, authHeaders, login, cadastrar, fetchMe, logout }
+  return { user, token, loading, error, isLoggedIn, login, register, fetchMe, logout }
 })

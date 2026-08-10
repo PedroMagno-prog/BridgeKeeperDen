@@ -113,3 +113,41 @@ async def listar_capitulos(
 
     result = await db.execute(stmt)
     return result.scalars().all()
+
+
+async def buscar_capitulo(
+    db: AsyncSession,
+    chapter_id: uuid.UUID,
+    manuscript_id: uuid.UUID,
+) -> ManuscriptChapter | None:
+    """Busca um capitulo pelo ID."""
+    result = await db.execute(
+        select(ManuscriptChapter).where(
+            ManuscriptChapter.id == chapter_id,
+            ManuscriptChapter.manuscript_id == manuscript_id,
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+async def atualizar_capitulo(
+    db: AsyncSession,
+    chapter: ManuscriptChapter,
+    *,
+    title: str | None = None,
+    content: str | None = None,
+    order_index: int | None = None,
+    visibility: VisibilityType | None = None,
+) -> ManuscriptChapter:
+    """Atualiza campos de um capitulo."""
+    if title is not None:
+        chapter.title = title
+    if content is not None:
+        chapter.content = content
+    if order_index is not None:
+        chapter.order_index = order_index
+    if visibility is not None:
+        chapter.visibility = visibility
+    await db.flush()
+    return chapter
+
