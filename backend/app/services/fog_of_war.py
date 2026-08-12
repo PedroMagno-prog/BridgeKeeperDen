@@ -14,34 +14,60 @@ from typing import Any
 from app.db.models.enums import UserRole, VisibilityType
 
 
-def sanitize_article_for_list(article: Any, role: UserRole) -> dict | None:
+def resolve_effective_visibility(
+    resource_visibility: VisibilityType,
+    created_by: Any,
+    user_id: Any,
+    role: UserRole,
+    specific_perm: VisibilityType | str | None = None,
+) -> tuple[VisibilityType, bool, bool]:
     """
-    Sanitiza um artigo para exibicao em listagem.
-
-    - MESTRE: retorna todos os campos.
-    - JOGADOR + NULA: retorna None (excluido da lista).
-    - JOGADOR + PARCIAL: retorna id, title, visibility, is_locked=True.
-    - JOGADOR + TOTAL: retorna campos publicos completos.
+    Resolve a visibilidade efetiva e as permissões de edição/exclusão (can_edit, can_delete).
+    Ordem de precedência:
+    1. MESTRE -> TOTAL (can_edit=True, can_delete=True)
+    2. Criador (created_by == user_id) -> TOTAL (can_edit=True, can_delete=True)
+    3. Permissão Específica do Usuário em tabela de permissões -> specific_perm
+    4. Visibilidade Padrão do Recurso -> resource_visibility
     """
     if role == UserRole.MESTRE:
-        return {
-            "id": article.id,
-            "title": article.title,
-            "visibility": article.visibility,
-            "in_game_date": article.in_game_date,
-            "in_game_sort_order": article.in_game_sort_order,
-            "tags": [t.name for t in article.tags],
-            "created_by": article.created_by,
-            "created_at": article.created_at,
-            "updated_at": article.updated_at,
-            "is_locked": False,
-        }
+        return VisibilityType.TOTAL, True, True
 
-    # JOGADOR
-    if article.visibility == VisibilityType.NULA:
+    if created_by and str(created_by) == str(user_id):
+        return VisibilityType.TOTAL, True, True
+
+    raw_eff = specific_perm if specific_perm is not None else resource_visibility
+    if isinstance(raw_eff, str):
+        try:
+            eff = VisibilityType(raw_eff)
+        except ValueError:
+            eff = VisibilityType.NULA
+    else:
+        eff = raw_eff
+
+    if eff == VisibilityType.TOTAL:
+        return VisibilityType.TOTAL, True, True
+    elif eff == VisibilityType.CONTROLADO:
+        return VisibilityType.CONTROLADO, False, False
+    elif eff == VisibilityType.PARCIAL:
+        return VisibilityType.PARCIAL, False, False
+    else:  # NULA
+        return VisibilityType.NULA, False, False
+
+
+def sanitize_article_for_list(
+    article: Any, role: UserRole, user_id: Any = None, specific_perm: VisibilityType | None = None
+) -> dict | None:
+    """
+    Sanitiza um artigo para exibição em listagem.
+    """
+    eff_vis, can_edit, can_delete = resolve_effective_visibility(
+        article.visibility, article.created_by, user_id, role, specific_perm
+    )
+
+    if eff_vis == VisibilityType.NULA:
         return None
 
-    if article.visibility == VisibilityType.PARCIAL:
+    if eff_vis == VisibilityType.PARCIAL:
         return {
             "id": article.id,
             "title": article.title,
@@ -53,9 +79,11 @@ def sanitize_article_for_list(article: Any, role: UserRole) -> dict | None:
             "created_at": None,
             "updated_at": None,
             "is_locked": True,
+            "can_edit": False,
+            "can_delete": False,
         }
 
-    # TOTAL
+    # CONTROLADO ou TOTAL
     return {
         "id": article.id,
         "title": article.title,
@@ -67,54 +95,25 @@ def sanitize_article_for_list(article: Any, role: UserRole) -> dict | None:
         "created_at": article.created_at,
         "updated_at": article.updated_at,
         "is_locked": False,
+        "can_edit": can_edit,
+        "can_delete": can_delete,
     }
 
 
-def sanitize_article_detail(article: Any, role: UserRole) -> dict | None:
+def sanitize_article_detail(
+    article: Any, role: UserRole, user_id: Any = None, specific_perm: VisibilityType | None = None
+) -> dict | None:
     """
-    Sanitiza um artigo para exibicao de detalhe (com sections).
-
-    - MESTRE: retorna tudo.
-    - JOGADOR + NULA: retorna None.
-    - JOGADOR + PARCIAL: retorna apenas id, title, is_locked=True.
-    - JOGADOR + TOTAL: retorna tudo.
+    Sanitiza um artigo para exibição de detalhe (com sections e image_url).
     """
-    if role == UserRole.MESTRE:
-        return {
-            "id": article.id,
-            "title": article.title,
-            "visibility": article.visibility,
-            "in_game_date": article.in_game_date,
-            "in_game_sort_order": article.in_game_sort_order,
-            "tags": [t.name for t in article.tags],
-            "sections": [
-                {
-                    "id": s.id,
-                    "title": s.title,
-                    "content": s.content,
-                    "order_index": s.order_index,
-                }
-                for s in article.sections
-            ],
-            "inventory_items": [
-                {
-                    "id": item.id,
-                    "item_name": item.item_name,
-                    "quantity": item.quantity,
-                    "description": item.description,
-                }
-                for item in article.inventory_items
-            ],
-            "created_by": article.created_by,
-            "created_at": article.created_at,
-            "updated_at": article.updated_at,
-            "is_locked": False,
-        }
+    eff_vis, can_edit, can_delete = resolve_effective_visibility(
+        article.visibility, article.created_by, user_id, role, specific_perm
+    )
 
-    if article.visibility == VisibilityType.NULA:
+    if eff_vis == VisibilityType.NULA:
         return None
 
-    if article.visibility == VisibilityType.PARCIAL:
+    if eff_vis == VisibilityType.PARCIAL:
         return {
             "id": article.id,
             "title": article.title,
@@ -128,9 +127,11 @@ def sanitize_article_detail(article: Any, role: UserRole) -> dict | None:
             "created_at": None,
             "updated_at": None,
             "is_locked": True,
+            "can_edit": False,
+            "can_delete": False,
         }
 
-    # TOTAL
+    # CONTROLADO ou TOTAL (ambos recebem o conteúdo completo!)
     return {
         "id": article.id,
         "title": article.title,
@@ -144,6 +145,7 @@ def sanitize_article_detail(article: Any, role: UserRole) -> dict | None:
                 "title": s.title,
                 "content": s.content,
                 "order_index": s.order_index,
+                "image_url": getattr(s, "image_url", None),
             }
             for s in article.sections
         ],
@@ -160,6 +162,8 @@ def sanitize_article_detail(article: Any, role: UserRole) -> dict | None:
         "created_at": article.created_at,
         "updated_at": article.updated_at,
         "is_locked": False,
+        "can_edit": can_edit,
+        "can_delete": can_delete,
     }
 
 

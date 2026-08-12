@@ -10,6 +10,7 @@ import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
 import WikilinkText from '@/components/ui/WikilinkText.vue'
 import WikilinkInput from '@/components/ui/WikilinkInput.vue'
 import ObsidianImportModal from '@/components/codex/ObsidianImportModal.vue'
+import PermissionsModal from '@/components/ui/PermissionsModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,9 +22,13 @@ const activeTag = ref('')
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
 const showObsidianModal = ref(false)
+const showPermModal = ref(false)
 const showDetail = ref(false)
+const showTagFilters = ref(true)
 
 const isMestre = computed(() => worldsStore.isMestre)
+const canEdit = computed(() => isMestre.value || articlesStore.current?.can_edit !== false)
+const canDelete = computed(() => isMestre.value || articlesStore.current?.can_delete !== false)
 
 // ── Novo artigo ──────────────────────────────────────────────────────────────
 const newTitle = ref('')
@@ -38,9 +43,10 @@ const editTitle = ref('')
 const editVisibility = ref<Visibility>('NULA')
 const editTags = ref('')
 const editInGameDate = ref('')
-const editSections = ref<{ title: string; content: string }[]>([])
+const editSections = ref<{ id?: string; title: string; content: string; image_url?: string | null }[]>([])
 const editInGameSortOrder = ref<number | null>(null)
 const saving = ref(false)
+const uploadingImageIndex = ref<number | null>(null)
 
 const allTags = computed(() => {
   const s = new Set<string>()
@@ -116,13 +122,38 @@ function openEditModal() {
   editTags.value = a.tags?.join(', ') ?? ''
   editInGameDate.value = a.in_game_date ?? ''
   editInGameSortOrder.value = a.in_game_sort_order ?? null
-  editSections.value = (a.sections ?? []).map((s) => ({ title: s.title, content: s.content }))
+  editSections.value = (a.sections ?? []).map((s) => ({
+    id: s.id,
+    title: s.title,
+    content: s.content,
+    image_url: s.image_url,
+  }))
   if (editSections.value.length === 0) editSections.value.push({ title: '', content: '' })
   showEditModal.value = true
 }
 
 function addEditSection() { editSections.value.push({ title: '', content: '' }) }
 function removeEditSection(i: number) { editSections.value.splice(i, 1) }
+
+async function handleSectionImageUpload(index: number, event: Event) {
+  const file = (event.target as HTMLInputElement).files?.[0]
+  const a = articlesStore.current
+  const sec = editSections.value[index]
+  if (!file || !a || !sec.id) return
+
+  uploadingImageIndex.value = index
+  try {
+    const url = await articlesStore.uploadSectionImage(a.id, sec.id, file)
+    if (url) {
+      sec.image_url = url
+      await articlesStore.fetchArticle(a.id)
+    }
+  } catch (err) {
+    alert('Erro ao fazer upload da imagem.')
+  } finally {
+    uploadingImageIndex.value = null
+  }
+}
 
 async function handleSave() {
   const a = articlesStore.current
@@ -183,9 +214,17 @@ function formatDate(iso: string) {
       <div class="search-bar">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input v-model="searchInput" type="text" placeholder="Buscar artigos..." class="search-bar__input" @keydown.enter="search" />
+        <button
+          v-if="allTags.length"
+          class="btn-tag-toggle"
+          :title="showTagFilters ? 'Ocultar Filtros de Tags' : 'Exibir Filtros de Tags'"
+          @click="showTagFilters = !showTagFilters"
+        >
+          🏷️ {{ showTagFilters ? '▴' : '▾' }}
+        </button>
       </div>
 
-      <div v-if="allTags.length" class="tag-pills">
+      <div v-if="showTagFilters && allTags.length" class="tag-pills">
         <button v-for="tag in allTags" :key="tag" class="tag-pill" :class="{ 'tag-pill--active': activeTag === tag }" @click="toggleTag(tag)">{{ tag }}</button>
       </div>
 
@@ -222,13 +261,16 @@ function formatDate(iso: string) {
           <h1 class="detail-title">{{ articlesStore.current.title }}</h1>
           <div class="detail-actions">
             <VisibilityBadge v-if="isMestre" :visibility="articlesStore.current.visibility" size="md" />
-            <button v-if="isMestre" class="btn-icon" title="Editar" @click="openEditModal">
+            <button v-if="isMestre" class="btn-ghost-sm" title="Gerenciar Permissões" @click="showPermModal = true">
+              🛡️ Permissões
+            </button>
+            <button v-if="canEdit" class="btn-icon" title="Editar" @click="openEditModal">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                 <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
               </svg>
             </button>
-            <button v-if="isMestre" class="btn-icon btn-icon--danger" title="Deletar" @click="handleDelete(articlesStore.current.id)">
+            <button v-if="canDelete" class="btn-icon btn-icon--danger" title="Deletar" @click="handleDelete(articlesStore.current.id)">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                 <path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
@@ -251,12 +293,16 @@ function formatDate(iso: string) {
         <div class="detail-sections">
           <div v-for="section in articlesStore.current.sections" :key="section.id" class="section-block">
             <h3 class="section-block__title">{{ section.title }}</h3>
+            <div v-if="section.image_url" class="section-block__image-container">
+              <img :src="section.image_url" alt="Imagem da Seção" class="section-block__image" />
+            </div>
             <div class="section-block__content">
               <WikilinkText :text="section.content" />
             </div>
           </div>
           <div v-if="!articlesStore.current.sections?.length" class="list-empty" style="padding: 2rem;">Sem seções.</div>
         </div>
+
 
         <!-- ═══ PAINEL DE CONEXÕES & BACKLINKS ═══ -->
         <div class="backlinks-panel">
@@ -343,6 +389,16 @@ function formatDate(iso: string) {
                 <button class="section-remove" title="Remover seção" @click="removeEditSection(i)">×</button>
               </div>
               <WikilinkInput v-model="sec.content" :rows="4" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
+              <div v-if="sec.id" class="section-img-upload">
+                <div v-if="sec.image_url" class="img-preview">
+                  <img :src="sec.image_url" alt="Preview da imagem" class="thumb" />
+                  <span class="img-filename">Imagem anexada</span>
+                </div>
+                <label class="btn-file-upload">
+                  📷 {{ uploadingImageIndex === i ? 'Enviando...' : (sec.image_url ? 'Alterar Imagem (WebP)' : 'Anexar Imagem (WebP)') }}
+                  <input type="file" accept="image/*" class="file-input-hidden" @change="handleSectionImageUpload(i, $event)" />
+                </label>
+              </div>
             </div>
             <button class="btn-link" @click="addEditSection">+ Adicionar Seção</button>
             <div class="modal__actions">
@@ -360,10 +416,94 @@ function formatDate(iso: string) {
       @close="showObsidianModal = false"
       @imported="articlesStore.fetchArticles()"
     />
+
+    <!-- Modal Permissões Individuais por Jogador -->
+    <PermissionsModal
+      v-if="showPermModal && articlesStore.current"
+      :article-id="articlesStore.current.id"
+      @close="showPermModal = false"
+    />
   </div>
 </template>
 
 <style scoped>
+.btn-tag-toggle {
+  background: var(--color-surface, #1f2937);
+  color: var(--color-text-dim, #9ca3af);
+  border: 1px solid var(--color-border, #374151);
+  border-radius: 4px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.btn-tag-toggle:hover {
+  background: var(--color-surface-hover, #374151);
+  color: var(--color-gold, #f3d17c);
+}
+
+.section-block__image-container {
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.section-block__image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border, #374151);
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.section-img-upload {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+}
+
+.img-preview {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.img-preview .thumb {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.img-filename {
+  font-size: 0.75rem;
+  color: var(--color-text-dim, #9ca3af);
+}
+
+.btn-file-upload {
+  font-size: 0.75rem;
+  color: var(--color-gold-light, #f3d17c);
+  cursor: pointer;
+  background: rgba(243, 209, 124, 0.1);
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  border: 1px solid rgba(243, 209, 124, 0.3);
+  transition: all 0.15s ease;
+}
+
+.btn-file-upload:hover {
+  background: rgba(243, 209, 124, 0.2);
+}
+
+.file-input-hidden {
+  display: none;
+}
 .ornament-divider {
   font-family: var(--font-display);
   font-size: 0.8rem;

@@ -31,6 +31,9 @@ class ArticleSection(Base):
     order_index: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0,
     )
+    image_url: Mapped[str | None] = mapped_column(
+        String(500), nullable=True, comment="URL da imagem complementar anexada à seção"
+    )
 
     # ── Relacionamentos ───────────────────────────────────────────────────────
     article: Mapped["Article"] = relationship("Article", back_populates="sections")

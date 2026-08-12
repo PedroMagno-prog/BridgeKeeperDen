@@ -19,3 +19,6 @@ from app.db.models.inventory_group import InventoryGroup  # noqa: F401
 from app.db.models.inventory import Inventory  # noqa: F401
 from app.db.models.inventory_item import InventoryItem  # noqa: F401
 from app.db.models.quest import Quest, QuestObjective, QuestStatus, QuestCategory  # noqa: F401
+from app.db.models.article_user_permission import ArticleUserPermission  # noqa: F401
+from app.db.models.inventory_user_permission import InventoryUserPermission  # noqa: F401
+from app.db.models.inventory_group_user_permission import InventoryGroupUserPermission  # noqa: F401

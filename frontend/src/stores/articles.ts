@@ -6,13 +6,14 @@ import { ref } from 'vue'
 import { api } from '@/api/client'
 import { useWorldsStore } from './worlds'
 
-export type Visibility = 'TOTAL' | 'PARCIAL' | 'NULA'
+export type Visibility = 'TOTAL' | 'PARCIAL' | 'CONTROLADO' | 'NULA'
 
 export interface ArticleSection {
   id: string
   title: string
   content: string
   order_index: number
+  image_url?: string | null
 }
 
 export interface InventoryItem {
@@ -35,6 +36,15 @@ export interface Article {
   created_at: string
   updated_at: string
   is_locked: boolean
+  can_edit?: boolean
+  can_delete?: boolean
+}
+
+export interface UserPermission {
+  user_id: string
+  username: string
+  email: string
+  visibility: Visibility
 }
 
 export interface ArticleResolveResult {
@@ -177,8 +187,35 @@ export const useArticlesStore = defineStore('articles', () => {
     return data
   }
 
+  async function fetchPermissions(articleId: string): Promise<UserPermission[]> {
+    const worldId = wid()
+    if (!worldId) return []
+    const { data } = await api.get<UserPermission[]>(`/worlds/${worldId}/articles/${articleId}/permissions`)
+    return data
+  }
+
+  async function updatePermissions(articleId: string, permissions: { user_id: string; visibility: Visibility }[]) {
+    const worldId = wid()
+    if (!worldId) return
+    await api.put(`/worlds/${worldId}/articles/${articleId}/permissions`, { permissions })
+  }
+
+  async function uploadSectionImage(articleId: string, sectionId: string, file: File) {
+    const worldId = wid()
+    if (!worldId) return
+    const formData = new FormData()
+    formData.append('file', file)
+    const { data } = await api.post<{ image_url: string }>(
+      `/worlds/${worldId}/articles/${articleId}/sections/${sectionId}/image`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+    return data.image_url
+  }
+
   return {
     articles, current, currentBacklinks, loading, searchQuery, tagFilter,
     fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory, importObsidianVault,
+    fetchPermissions, updatePermissions, uploadSectionImage,
   }
 })

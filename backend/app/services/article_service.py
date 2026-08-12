@@ -355,3 +355,108 @@ async def buscar_backlinks(
             })
 
     return backlinks
+
+
+# ── Gestão de Permissões e Imagens da Seção ────────────────────────────────────
+
+async def obter_permissoes_artigo(
+    db: AsyncSession, world_id: uuid.UUID, article_id: uuid.UUID
+) -> list[dict]:
+    """Retorna a matriz de permissões por usuário para um artigo."""
+    from app.db.models.world_member import WorldMember
+    from app.db.models.user import User
+    from app.db.models.article_user_permission import ArticleUserPermission
+
+    # Buscar artigo para visibilidade default
+    art_res = await db.execute(select(Article).where(Article.id == article_id))
+    article = art_res.scalar_one_or_none()
+    default_vis = article.visibility if article else VisibilityType.NULA
+
+    # Buscar membros do mundo (jogadores e mestres)
+    members_res = await db.execute(
+        select(User, WorldMember)
+        .join(WorldMember, User.id == WorldMember.user_id)
+        .where(WorldMember.world_id == world_id)
+    )
+    members = members_res.all()
+
+    # Buscar permissões configuradas
+    perms_res = await db.execute(
+        select(ArticleUserPermission).where(ArticleUserPermission.article_id == article_id)
+    )
+    perms_map = {p.user_id: p.visibility for p in perms_res.scalars().all()}
+
+    result = []
+    for user, member in members:
+        # Se for MESTRE ou criador, visibilidade é TOTAL
+        if member.role == UserRole.MESTRE or (article and article.created_by == user.id):
+            vis = VisibilityType.TOTAL
+        else:
+            vis = perms_map.get(user.id, default_vis)
+
+        result.append({
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "visibility": vis,
+        })
+    return result
+
+
+async def atualizar_permissoes_artigo(
+    db: AsyncSession, article_id: uuid.UUID, permissions: list[dict]
+) -> None:
+    """Atualiza a matriz de permissões por usuário de um artigo."""
+    from app.db.models.article_user_permission import ArticleUserPermission
+
+    for p in permissions:
+        u_id = uuid.UUID(str(p["user_id"]))
+        vis = VisibilityType(p["visibility"])
+
+        # Buscar permissão existente
+        stmt = select(ArticleUserPermission).where(
+            ArticleUserPermission.article_id == article_id,
+            ArticleUserPermission.user_id == u_id,
+        )
+        res = await db.execute(stmt)
+        perm_obj = res.scalar_one_or_none()
+
+        if perm_obj:
+            perm_obj.visibility = vis
+        else:
+            db.add(ArticleUserPermission(
+                article_id=article_id,
+                user_id=u_id,
+                visibility=vis,
+            ))
+    await db.flush()
+
+
+async def anexar_imagem_secao(
+    db: AsyncSession, section: ArticleSection, file_bytes: bytes, filename: str
+) -> str:
+    """Otimiza a imagem via Pillow se >5MB, grava em disco estático e atualiza a URL."""
+    import os
+    from app.services.image_service import otimizar_imagem_secao
+
+    opt_bytes, opt_filename = otimizar_imagem_secao(file_bytes, filename)
+
+    # Diretório estático
+    static_dir = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "..", "static", "section_images")
+    )
+    os.makedirs(static_dir, exist_ok=True)
+
+    # Nome único para o arquivo gravado
+    unique_filename = f"{uuid.uuid4().hex[:8]}_{opt_filename}"
+    file_path = os.path.join(static_dir, unique_filename)
+
+    with open(file_path, "wb") as f:
+        f.write(opt_bytes)
+
+    image_url = f"/static/section_images/{unique_filename}"
+    section.image_url = image_url
+    db.add(section)
+    await db.flush()
+
+    return image_url

@@ -17,4 +17,5 @@ class VisibilityType(str, enum.Enum):
     """Nível de Névoa de Guerra (Fog of War) de um recurso."""
     TOTAL = "TOTAL"
     PARCIAL = "PARCIAL"
+    CONTROLADO = "CONTROLADO"
     NULA = "NULA"

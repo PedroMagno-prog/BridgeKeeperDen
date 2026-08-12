@@ -57,6 +57,7 @@ class SectionOut(BaseModel):
     title: str
     content: str
     order_index: int
+    image_url: str | None = None
 
 
 class InventoryItemOut(BaseModel):
@@ -78,6 +79,8 @@ class ArticleListOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_locked: bool = False
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 class ArticleDetailOut(BaseModel):
@@ -94,6 +97,8 @@ class ArticleDetailOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_locked: bool = False
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 # ── Wikilinks & Menções ───────────────────────────────────────────────────────
