@@ -123,3 +123,12 @@ class BacklinkOut(BaseModel):
     section_title: str
     snippet: str
     is_locked: bool = False
+
+
+# ── Importação Obsidian ───────────────────────────────────────────────────────
+
+class ObsidianImportResultOut(BaseModel):
+    """Resultado da importação em lote de cofre Obsidian (.zip)."""
+    imported_count: int
+    skipped_count: int
+    message: str

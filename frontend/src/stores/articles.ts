@@ -159,8 +159,26 @@ export const useArticlesStore = defineStore('articles', () => {
     return data
   }
 
+  async function importObsidianVault(file: File, useFoldersAsTags: boolean) {
+    const worldId = wid()
+    if (!worldId) throw new Error('Nenhum mundo selecionado.')
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('use_folders_as_tags', String(useFoldersAsTags))
+
+    const { data } = await api.post<{ imported_count: number; skipped_count: number; message: string }>(
+      `/worlds/${worldId}/articles/import/obsidian`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+
+    await fetchArticles()
+    return data
+  }
+
   return {
     articles, current, currentBacklinks, loading, searchQuery, tagFilter,
-    fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory,
+    fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory, importObsidianVault,
   }
 })

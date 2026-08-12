@@ -9,6 +9,7 @@ import { useWorldsStore } from '@/stores/worlds'
 import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
 import WikilinkText from '@/components/ui/WikilinkText.vue'
 import WikilinkInput from '@/components/ui/WikilinkInput.vue'
+import ObsidianImportModal from '@/components/codex/ObsidianImportModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -19,6 +20,7 @@ const searchInput = ref('')
 const activeTag = ref('')
 const showCreateModal = ref(false)
 const showEditModal = ref(false)
+const showObsidianModal = ref(false)
 const showDetail = ref(false)
 
 const isMestre = computed(() => worldsStore.isMestre)
@@ -167,10 +169,15 @@ function formatDate(iso: string) {
     <div class="codex__list">
       <div class="codex__toolbar">
         <h2 class="codex__title">Codex</h2>
-        <button v-if="isMestre" class="btn-gold-sm" @click="showCreateModal = true">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Novo
-        </button>
+        <div v-if="isMestre" class="toolbar-btns">
+          <button class="btn-ghost-sm" title="Importar Cofre Obsidian (.zip)" @click="showObsidianModal = true">
+            📥 Importar Obsidian
+          </button>
+          <button class="btn-gold-sm" @click="showCreateModal = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Novo
+          </button>
+        </div>
       </div>
 
       <div class="search-bar">
@@ -346,6 +353,13 @@ function formatDate(iso: string) {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Modal Importar Obsidian -->
+    <ObsidianImportModal
+      :show="showObsidianModal"
+      @close="showObsidianModal = false"
+      @imported="articlesStore.fetchArticles()"
+    />
   </div>
 </template>
 
@@ -424,6 +438,29 @@ function formatDate(iso: string) {
 .codex--detail-open .codex__list { width: 340px; }
 .codex__toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
 .codex__title { font-family: var(--font-display); font-size: 1.1rem; color: var(--color-gold); }
+
+.toolbar-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.btn-ghost-sm {
+  padding: 5px 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-gold);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-ghost-sm:hover {
+  background: var(--color-gold-glow);
+  border-color: var(--color-gold);
+}
+
 .btn-gold-sm { display: flex; align-items: center; gap: var(--space-1); padding: 6px 12px; background: var(--color-gold); color: #0d0f14; border: none; border-radius: var(--radius-sm); font-family: var(--font-body); font-weight: 600; font-size: 0.75rem; cursor: pointer; transition: all var(--transition-fast); }
 .btn-gold-sm:hover { background: var(--color-gold-light); box-shadow: var(--shadow-gold); }
 
