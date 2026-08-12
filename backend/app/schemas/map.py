@@ -18,6 +18,12 @@ class MapCreate(BaseModel):
     image_url: str = Field(..., min_length=1, max_length=500)
 
 
+class MapUpdateInput(BaseModel):
+    """Input para atualizacao de um mapa."""
+    title: str | None = Field(None, min_length=1, max_length=100)
+    image_url: str | None = Field(None, min_length=1, max_length=500)
+
+
 class MapLayerCreate(BaseModel):
     """Input para criacao de uma camada."""
     name: str = Field(..., min_length=1, max_length=50)
@@ -58,6 +64,15 @@ class MapLayerOut(BaseModel):
     is_default_active: bool
 
 
+class MapPinArticleSummary(BaseModel):
+    """Resumo de artigo vinculado a um pino no mapa."""
+    id: uuid.UUID
+    title: str
+    visibility: VisibilityType
+    tags: list[str] = []
+    first_section_preview: str | None = None
+
+
 class MapPinOut(BaseModel):
     id: uuid.UUID
     title: str
@@ -69,6 +84,8 @@ class MapPinOut(BaseModel):
     layer_id: uuid.UUID | None = None
     target_article_id: uuid.UUID | None = None
     target_map_id: uuid.UUID | None = None
+    target_article: MapPinArticleSummary | None = None
+    target_map_title: str | None = None
     is_locked: bool = False
 
 

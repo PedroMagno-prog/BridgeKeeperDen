@@ -13,14 +13,58 @@ from app.schemas.article import (
     ArticleCreate,
     ArticleDetailOut,
     ArticleListOut,
+    ArticleResolveOut,
     ArticleUpdate,
+    BacklinkOut,
     InventoryItemOut,
     InventoryUpdateInput,
+    MentionSuggestionOut,
 )
 from app.services import article_service
 from app.services.fog_of_war import sanitize_article_detail, sanitize_article_for_list
 
 router = APIRouter()
+
+
+# ── GET /worlds/{world_id}/articles/resolve ───────────────────────────────────
+
+@router.get(
+    "/resolve",
+    response_model=ArticleResolveOut,
+    summary="Resolve rapidamente um Wikilink pelo título",
+)
+async def resolver_wikilink(
+    title: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Verifica se um artigo existe pelo título e retorna seu ID/visibilidade."""
+    return await article_service.resolver_artigo_por_titulo(db, ctx.world_id, title, ctx.role)
+
+
+# ── GET /worlds/{world_id}/articles/search-mentions ───────────────────────────
+
+@router.get(
+    "/search-mentions",
+    response_model=list[MentionSuggestionOut],
+    summary="Autocomplete de sugestões para menções e Wikilinks",
+)
+async def autocomplete_mencoes(
+    query: str = "",
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Busca até 10 artigos por título para autocomplete no editor de texto."""
+    articles = await article_service.buscar_mencao_sugestoes(db, ctx.world_id, query, ctx.role)
+    return [
+        MentionSuggestionOut(
+            id=a.id,
+            title=a.title,
+            visibility=a.visibility,
+            tags=[t.name for t in a.tags] if hasattr(a, "tags") and a.tags else [],
+        )
+        for a in articles
+    ]
 
 
 # ── GET /worlds/{world_id}/articles ───────────────────────────────────────────
@@ -212,3 +256,19 @@ async def atualizar_inventario(
         )
         for item in items
     ]
+
+
+# ── GET /worlds/{world_id}/articles/{article_id}/backlinks ────────────────────
+
+@router.get(
+    "/{article_id}/backlinks",
+    response_model=list[BacklinkOut],
+    summary="Obtém lista de backlinks/citações que apontam para este artigo",
+)
+async def buscar_backlinks(
+    article_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Retorna referências de outros artigos que citam o artigo atual no formato [[Título]]."""
+    return await article_service.buscar_backlinks(db, ctx.world_id, article_id, ctx.role)

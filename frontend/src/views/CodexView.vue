@@ -7,6 +7,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useArticlesStore, type Article, type Visibility } from '@/stores/articles'
 import { useWorldsStore } from '@/stores/worlds'
 import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
+import WikilinkText from '@/components/ui/WikilinkText.vue'
+import WikilinkInput from '@/components/ui/WikilinkInput.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -242,9 +244,33 @@ function formatDate(iso: string) {
         <div class="detail-sections">
           <div v-for="section in articlesStore.current.sections" :key="section.id" class="section-block">
             <h3 class="section-block__title">{{ section.title }}</h3>
-            <div class="section-block__content">{{ section.content }}</div>
+            <div class="section-block__content">
+              <WikilinkText :text="section.content" />
+            </div>
           </div>
           <div v-if="!articlesStore.current.sections?.length" class="list-empty" style="padding: 2rem;">Sem seções.</div>
+        </div>
+
+        <!-- ═══ PAINEL DE CONEXÕES & BACKLINKS ═══ -->
+        <div class="backlinks-panel">
+          <div class="ornament-divider">Conexões & Backlinks ({{ articlesStore.currentBacklinks.length }})</div>
+          <div v-if="articlesStore.currentBacklinks.length > 0" class="backlinks-list">
+            <div
+              v-for="b in articlesStore.currentBacklinks"
+              :key="b.article_id + b.section_title"
+              class="backlink-card"
+              @click="openArticle(b.article_id)"
+            >
+              <div class="backlink-card__header">
+                <span class="backlink-card__title">📖 {{ b.title }}</span>
+                <span class="backlink-card__section">Seção: {{ b.section_title }}</span>
+              </div>
+              <p class="backlink-card__snippet">{{ b.snippet }}</p>
+            </div>
+          </div>
+          <div v-else class="empty-backlinks">
+            Nenhum outro artigo cita este documento ainda.
+          </div>
         </div>
 
         <div v-if="articlesStore.current.inventory_items?.length" class="inventory-panel">
@@ -280,7 +306,7 @@ function formatDate(iso: string) {
             <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
             <div v-for="(sec, i) in newSections" :key="i" class="section-form">
               <input v-model="sec.title" type="text" class="form-input" :placeholder="`Título da seção ${i + 1}`" />
-              <textarea v-model="sec.content" class="form-input" placeholder="Conteúdo..." rows="3" />
+              <WikilinkInput v-model="sec.content" :rows="3" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
             </div>
             <button class="btn-link" @click="addCreateSection">+ Seção</button>
             <div class="modal__actions"><button class="btn btn--ghost" @click="showCreateModal = false">Cancelar</button><button class="btn btn--gold" @click="handleCreate" :disabled="creating || !newTitle.trim()">{{ creating ? 'Criando...' : 'Criar' }}</button></div>
@@ -309,7 +335,7 @@ function formatDate(iso: string) {
                 <input v-model="sec.title" type="text" class="form-input" :placeholder="`Seção ${i + 1}`" />
                 <button class="section-remove" title="Remover seção" @click="removeEditSection(i)">×</button>
               </div>
-              <textarea v-model="sec.content" class="form-input form-input--tall" placeholder="Conteúdo da seção..." rows="5" />
+              <WikilinkInput v-model="sec.content" :rows="4" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
             </div>
             <button class="btn-link" @click="addEditSection">+ Adicionar Seção</button>
             <div class="modal__actions">
@@ -324,6 +350,73 @@ function formatDate(iso: string) {
 </template>
 
 <style scoped>
+.ornament-divider {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  color: var(--color-gold);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 4px;
+  margin: var(--space-6) 0 var(--space-4);
+}
+
+.backlinks-panel {
+  margin-top: var(--space-6);
+}
+
+.backlinks-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.backlink-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 3px solid var(--color-gold);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3) var(--space-4);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.backlink-card:hover {
+  background: var(--color-surface-2);
+  border-color: var(--color-gold);
+}
+
+.backlink-card__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.backlink-card__title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-gold);
+}
+
+.backlink-card__section {
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+
+.backlink-card__snippet {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.empty-backlinks {
+  font-size: 0.8rem;
+  color: var(--color-text-dim);
+  font-style: italic;
+  padding: var(--space-2) 0;
+}
+
 .codex { display: flex; gap: 0; height: calc(100vh - 56px); margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-8)); }
 
 /* Lista */
