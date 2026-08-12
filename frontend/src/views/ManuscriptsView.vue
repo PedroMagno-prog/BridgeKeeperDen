@@ -45,7 +45,7 @@ function selectChapter(ch: Chapter) {
 }
 
 watch(() => manuscriptsStore.chapters, (chs) => {
-  if (chs.length && !activeChapter.value) activeChapter.value = chs[0]
+  if (chs.length && !activeChapter.value) activeChapter.value = chs[0] ?? null
 })
 
 async function createManuscript() {

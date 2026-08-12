@@ -68,7 +68,11 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function authHeaders(): Record<string, string> {
+    return token.value ? { Authorization: `Bearer ${token.value}` } : {}
+  }
+
   function logout() { clearSession() }
 
-  return { user, token, loading, error, isLoggedIn, login, register, fetchMe, logout }
+  return { user, token, loading, error, isLoggedIn, authHeaders, login, register, fetchMe, logout }
 })

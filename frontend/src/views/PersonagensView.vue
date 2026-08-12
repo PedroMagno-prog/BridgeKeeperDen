@@ -42,7 +42,7 @@ function logout() {
         <span class="navbar__name">BridgeKeeper</span>
       </div>
       <div class="navbar__user">
-        <span class="navbar__greeting">Olá, {{ auth.usuario?.nome ?? '…' }}</span>
+        <span class="navbar__greeting">Olá, {{ auth.user?.username ?? '…' }}</span>
         <button id="btn-logout" class="navbar__logout" type="button" @click="logout">
           Sair
         </button>
