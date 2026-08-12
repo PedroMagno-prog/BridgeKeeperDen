@@ -12,10 +12,18 @@ const router = useRouter()
 const worldsStore = useWorldsStore()
 const articlesStore = useArticlesStore()
 
+import MembersModal from '@/components/worlds/MembersModal.vue'
+
 const showCreateModal = ref(false)
+const showJoinModal = ref(false)
+const showMembersModal = ref(false)
+const targetWorldForMembers = ref<string | null>(null)
+
 const newName = ref('')
 const newDesc = ref('')
+const inviteCodeInput = ref('')
 const creating = ref(false)
+const joining = ref(false)
 
 onMounted(async () => {
   await worldsStore.fetchWorlds()
@@ -47,6 +55,28 @@ async function handleCreate() {
   }
 }
 
+async function handleJoinByCode() {
+  if (!inviteCodeInput.value.trim()) return
+  joining.value = true
+  try {
+    const code = inviteCodeInput.value.trim()
+    const world = await worldsStore.joinWorld(code)
+    showJoinModal.value = false
+    inviteCodeInput.value = ''
+    router.push('/codex')
+  } catch (err: any) {
+    alert(err?.response?.data?.detail || 'Erro ao entrar no mundo.')
+  } finally {
+    joining.value = false
+  }
+}
+
+function openMembersModal(e: MouseEvent, worldId: string) {
+  e.stopPropagation()
+  targetWorldForMembers.value = worldId
+  showMembersModal.value = true
+}
+
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
 }
@@ -60,12 +90,18 @@ function formatDate(iso: string) {
         <h1 class="dashboard__title">Seus Mundos</h1>
         <p class="dashboard__subtitle">Selecione uma campanha para explorar</p>
       </div>
-      <button class="btn-create" @click="showCreateModal = true">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-        Criar Novo Mundo
-      </button>
+
+      <div class="header-btns">
+        <button class="btn-ghost-action" @click="showJoinModal = true">
+          🔑 Entrar com Código
+        </button>
+        <button class="btn-create" @click="showCreateModal = true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          Criar Novo Mundo
+        </button>
+      </div>
     </div>
 
     <!-- Grade de Cards -->
@@ -74,10 +110,13 @@ function formatDate(iso: string) {
     <div v-else-if="worldsStore.worlds.length === 0" class="empty-state">
       <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--color-text-dim)" stroke-width="1">
         <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/>
       </svg>
       <p>Nenhum mundo criado ainda.</p>
-      <button class="btn-create btn-create--sm" @click="showCreateModal = true">Criar seu primeiro mundo</button>
+      <div class="empty-btns">
+        <button class="btn-create btn-create--sm" @click="showCreateModal = true">Criar seu primeiro mundo</button>
+        <button class="btn-ghost-action" @click="showJoinModal = true">🔑 Entrar com Código</button>
+      </div>
     </div>
 
     <div v-else class="worlds-grid">
@@ -97,6 +136,15 @@ function formatDate(iso: string) {
         <p class="world-card__desc">{{ world.description || 'Sem descrição' }}</p>
         <div class="world-card__footer">
           <span class="world-card__date">{{ formatDate(world.created_at) }}</span>
+
+          <button
+            v-if="world.role === 'MESTRE'"
+            class="btn-members-card"
+            title="Gerenciar Membros & Convites"
+            @click="(e) => openMembersModal(e, world.id)"
+          >
+            👥 Membros
+          </button>
         </div>
         <div class="world-card__glow" />
       </button>
@@ -142,6 +190,43 @@ function formatDate(iso: string) {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Modal Entrar por Código -->
+    <Teleport to="body">
+      <Transition name="fade">
+        <div v-if="showJoinModal" class="modal-overlay" @click.self="showJoinModal = false">
+          <div class="modal" @click.stop>
+            <h3 class="modal__title">Entrar com Código de Convite</h3>
+            <div class="form-group">
+              <label>Código do Convite</label>
+              <input
+                v-model="inviteCodeInput"
+                type="text"
+                placeholder="Ex: k9X2mQ8pL1"
+                class="form-input"
+                autofocus
+                @keydown.enter="handleJoinByCode"
+              />
+            </div>
+            <div class="modal__actions">
+              <button class="btn btn--ghost" @click="showJoinModal = false" :disabled="joining">Cancelar</button>
+              <button class="btn btn--gold" @click="handleJoinByCode" :disabled="joining || !inviteCodeInput.trim()">
+                {{ joining ? 'Entrando...' : 'Entrar no Mundo' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
+    <!-- Modal Gerenciar Membros -->
+    <MembersModal
+      v-if="targetWorldForMembers"
+      :show="showMembersModal"
+      :world-id="targetWorldForMembers"
+      :is-mestre="worldsStore.worlds.find((w) => w.id === targetWorldForMembers)?.role === 'MESTRE'"
+      @close="showMembersModal = false"
+    />
   </div>
 </template>
 
@@ -161,6 +246,50 @@ function formatDate(iso: string) {
   color: var(--color-gold);
 }
 .dashboard__subtitle { color: var(--color-text-muted); font-size: 0.9rem; margin-top: var(--space-1); }
+
+.header-btns {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.btn-ghost-action {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-weight: 500;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-ghost-action:hover {
+  border-color: var(--color-gold-dim);
+  color: var(--color-gold);
+}
+
+.btn-members-card {
+  padding: 2px 8px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-members-card:hover {
+  border-color: var(--color-gold-dim);
+  color: var(--color-gold);
+}
+
+.empty-btns {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+}
 
 /* Create Button */
 .btn-create {

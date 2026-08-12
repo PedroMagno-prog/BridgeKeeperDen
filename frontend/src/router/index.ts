@@ -68,6 +68,12 @@ const router = createRouter({
       component: () => import('@/views/GraphView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/join/:code',
+      name: 'join-world',
+      component: () => import('@/views/JoinWorldView.vue'),
+      meta: { requiresAuth: true, fullscreen: true },
+    },
   ],
 })
 
@@ -79,11 +85,19 @@ router.beforeEach(async (to) => {
   if (to.meta.requiresAuth && !auth.isLoggedIn) {
     // Tenta recarregar o usuário do token persistido antes de redirecionar
     await auth.fetchMe()
-    if (!auth.isLoggedIn) return { name: 'login' }
+    if (!auth.isLoggedIn) {
+      localStorage.setItem('bk_redirect_after_login', to.fullPath)
+      return { name: 'login' }
+    }
   }
 
-  // Rota pública: usuário já logado → redireciona para dashboard
+  // Rota pública: usuário já logado → redireciona para dashboard (ou rota salva de convite)
   if (to.meta.public && auth.isLoggedIn) {
+    const savedRedirect = localStorage.getItem('bk_redirect_after_login')
+    if (savedRedirect) {
+      localStorage.removeItem('bk_redirect_after_login')
+      return savedRedirect
+    }
     return { name: 'dashboard' }
   }
 })
