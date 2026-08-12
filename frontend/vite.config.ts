@@ -17,9 +17,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      // Redireciona /api/* para o backend FastAPI em localhost:8001
+      // Redireciona /api/* para o backend FastAPI em localhost:8000
       '/api': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8000',
         changeOrigin: true,
       },
     },

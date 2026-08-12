@@ -305,3 +305,173 @@ def sanitize_timeline_event(article: Any, role: UserRole) -> dict | None:
         "visibility": article.visibility,
         "is_locked": False,
     }
+
+
+def sanitize_inventory_item(item: Any, role: UserRole) -> dict:
+    """Sanitiza um item de inventário respeitando a visibilidade do artigo vinculado."""
+    display_name = item.custom_name
+    article_dict = None
+
+    if item.article:
+        if role == UserRole.JOGADOR and item.article.visibility == VisibilityType.NULA:
+            display_name = item.custom_name or "Item Desconhecido (Névoa)"
+            article_dict = None
+        elif role == UserRole.JOGADOR and item.article.visibility == VisibilityType.PARCIAL:
+            display_name = item.custom_name or item.article.title
+            article_dict = {
+                "id": item.article.id,
+                "title": item.article.title,
+                "visibility": item.article.visibility,
+                "tags": [],
+            }
+        else:
+            display_name = item.custom_name or item.article.title
+            article_dict = {
+                "id": item.article.id,
+                "title": item.article.title,
+                "visibility": item.article.visibility,
+                "tags": [t.name for t in item.article.tags] if hasattr(item.article, "tags") and item.article.tags else [],
+            }
+    else:
+        if not display_name:
+            display_name = "Item Sem Nome"
+
+    return {
+        "id": item.id,
+        "inventory_id": item.inventory_id,
+        "article_id": item.article_id if (role == UserRole.MESTRE or not item.article or item.article.visibility != VisibilityType.NULA) else None,
+        "custom_name": item.custom_name,
+        "display_name": display_name,
+        "quantity": item.quantity,
+        "notes": item.notes if (role == UserRole.MESTRE or not item.article or item.article.visibility != VisibilityType.NULA) else None,
+        "order_index": item.order_index,
+        "created_at": item.created_at,
+        "article": article_dict,
+    }
+
+
+def sanitize_inventory_detail(inventory: Any, role: UserRole) -> dict | None:
+    """Sanitiza um inventário individual com seus itens."""
+    if role == UserRole.MESTRE:
+        items_sanitized = [sanitize_inventory_item(item, role) for item in inventory.items]
+        items_count = len(inventory.items)
+        is_over = bool(inventory.limit and items_count > inventory.limit)
+        return {
+            "id": inventory.id,
+            "world_id": inventory.world_id,
+            "group_id": inventory.group_id,
+            "owner_article_id": inventory.owner_article_id,
+            "name": inventory.name,
+            "description": inventory.description,
+            "limit": inventory.limit,
+            "visibility": inventory.visibility,
+            "items_count": items_count,
+            "is_over_limit": is_over,
+            "created_by": inventory.created_by,
+            "created_at": inventory.created_at,
+            "updated_at": inventory.updated_at,
+            "items": items_sanitized,
+            "is_locked": False,
+        }
+
+    if inventory.visibility == VisibilityType.NULA:
+        return None
+
+    if inventory.visibility == VisibilityType.PARCIAL:
+        return {
+            "id": inventory.id,
+            "world_id": inventory.world_id,
+            "group_id": inventory.group_id,
+            "owner_article_id": None,
+            "name": inventory.name,
+            "description": None,
+            "limit": inventory.limit,
+            "visibility": inventory.visibility,
+            "items_count": len(inventory.items),
+            "is_over_limit": bool(inventory.limit and len(inventory.items) > inventory.limit),
+            "created_by": inventory.created_by,
+            "created_at": inventory.created_at,
+            "updated_at": inventory.updated_at,
+            "items": [],
+            "is_locked": True,
+        }
+
+    # TOTAL
+    items_sanitized = [sanitize_inventory_item(item, role) for item in inventory.items]
+    items_count = len(inventory.items)
+    is_over = bool(inventory.limit and items_count > inventory.limit)
+    return {
+        "id": inventory.id,
+        "world_id": inventory.world_id,
+        "group_id": inventory.group_id,
+        "owner_article_id": inventory.owner_article_id,
+        "name": inventory.name,
+        "description": inventory.description,
+        "limit": inventory.limit,
+        "visibility": inventory.visibility,
+        "items_count": items_count,
+        "is_over_limit": is_over,
+        "created_by": inventory.created_by,
+        "created_at": inventory.created_at,
+        "updated_at": inventory.updated_at,
+        "items": items_sanitized,
+        "is_locked": False,
+    }
+
+
+def sanitize_inventory_group_detail(group: Any, role: UserRole) -> dict | None:
+    """Sanitiza um grupo de inventários com seus inventários associados."""
+    if role == UserRole.MESTRE:
+        invs = [sanitize_inventory_detail(inv, role) for inv in group.inventories]
+        valid_invs = [inv for inv in invs if inv is not None]
+        return {
+            "id": group.id,
+            "world_id": group.world_id,
+            "name": group.name,
+            "description": group.description,
+            "visibility": group.visibility,
+            "icon": group.icon,
+            "inventories_count": len(valid_invs),
+            "created_by": group.created_by,
+            "created_at": group.created_at,
+            "updated_at": group.updated_at,
+            "inventories": valid_invs,
+            "is_locked": False,
+        }
+
+    if group.visibility == VisibilityType.NULA:
+        return None
+
+    if group.visibility == VisibilityType.PARCIAL:
+        return {
+            "id": group.id,
+            "world_id": group.world_id,
+            "name": group.name,
+            "description": None,
+            "visibility": group.visibility,
+            "icon": group.icon,
+            "inventories_count": len(group.inventories),
+            "created_by": group.created_by,
+            "created_at": group.created_at,
+            "updated_at": group.updated_at,
+            "inventories": [],
+            "is_locked": True,
+        }
+
+    # TOTAL
+    invs = [sanitize_inventory_detail(inv, role) for inv in group.inventories]
+    valid_invs = [inv for inv in invs if inv is not None]
+    return {
+        "id": group.id,
+        "world_id": group.world_id,
+        "name": group.name,
+        "description": group.description,
+        "visibility": group.visibility,
+        "icon": group.icon,
+        "inventories_count": len(valid_invs),
+        "created_by": group.created_by,
+        "created_at": group.created_at,
+        "updated_at": group.updated_at,
+        "inventories": valid_invs,
+        "is_locked": False,
+    }

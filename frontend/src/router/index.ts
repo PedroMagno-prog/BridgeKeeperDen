@@ -50,6 +50,12 @@ const router = createRouter({
       component: () => import('@/views/ManuscriptsView.vue'),
       meta: { requiresAuth: true },
     },
+    {
+      path: '/inventario',
+      name: 'inventario',
+      component: () => import('@/views/InventarioView.vue'),
+      meta: { requiresAuth: true },
+    },
   ],
 })
 

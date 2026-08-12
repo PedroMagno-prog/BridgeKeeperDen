@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.api.routes import auth, users, worlds, articles, maps, timeline, manuscripts
+from app.api.routes import auth, users, worlds, articles, maps, timeline, manuscripts, inventories
 
 api_router = APIRouter()
 
@@ -31,4 +31,9 @@ api_router.include_router(
     manuscripts.router,
     prefix="/worlds/{world_id}/manuscripts",
     tags=["Manuscripts"],
+)
+api_router.include_router(
+    inventories.router,
+    prefix="/worlds/{world_id}/inventories",
+    tags=["Inventories"],
 )

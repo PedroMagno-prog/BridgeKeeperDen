@@ -15,3 +15,6 @@ from app.db.models.map_pin import MapPin  # noqa: F401
 from app.db.models.manuscript import Manuscript  # noqa: F401
 from app.db.models.manuscript_chapter import ManuscriptChapter  # noqa: F401
 from app.db.models.timeline_era import TimelineEra  # noqa: F401
+from app.db.models.inventory_group import InventoryGroup  # noqa: F401
+from app.db.models.inventory import Inventory  # noqa: F401
+from app.db.models.inventory_item import InventoryItem  # noqa: F401
