@@ -10,8 +10,11 @@ const worldsStore = useWorldsStore()
 const authStore = useAuthStore()
 const articlesStore = useArticlesStore()
 
+import MembersModal from '@/components/worlds/MembersModal.vue'
+
 const showWorldDropdown = ref(false)
 const showCreateWorld = ref(false)
+const showMembersModal = ref(false)
 const newWorldName = ref('')
 const newWorldDesc = ref('')
 const globalSearch = ref('')
@@ -53,15 +56,26 @@ function logout() {
 <template>
   <header class="app-header">
     <!-- Seletor de Mundo -->
-    <div class="world-selector" @click="showWorldDropdown = !showWorldDropdown">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
-        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-      </svg>
-      <span class="world-selector__name">{{ worldsStore.activeWorld?.name ?? 'Selecionar Mundo' }}</span>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron" :class="{ 'chevron--open': showWorldDropdown }">
-        <polyline points="6 9 12 15 18 9"/>
-      </svg>
+    <div class="world-selector-group">
+      <div class="world-selector" @click="showWorldDropdown = !showWorldDropdown">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+        </svg>
+        <span class="world-selector__name">{{ worldsStore.activeWorld?.name ?? 'Selecionar Mundo' }}</span>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="chevron" :class="{ 'chevron--open': showWorldDropdown }">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </div>
+
+      <button
+        v-if="worldsStore.activeWorld"
+        class="btn-header-icon"
+        title="Membros & Convites do Mundo"
+        @click="showMembersModal = true"
+      >
+        👥 Membros
+      </button>
     </div>
 
     <!-- Dropdown de Mundos -->
@@ -146,7 +160,17 @@ function logout() {
         </div>
       </Transition>
     </Teleport>
+
+    <!-- Modal Gerenciar Membros -->
+    <MembersModal
+      v-if="worldsStore.activeWorld"
+      :show="showMembersModal"
+      :world-id="worldsStore.activeWorld.id"
+      :is-mestre="worldsStore.isMestre"
+      @close="showMembersModal = false"
+    />
   </header>
+
 </template>
 
 <style scoped>
@@ -165,6 +189,12 @@ function logout() {
 }
 
 /* World Selector */
+.world-selector-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
 .world-selector {
   display: flex;
   align-items: center;
@@ -174,9 +204,25 @@ function logout() {
   cursor: pointer;
   color: var(--color-text);
   transition: background var(--transition-fast);
-  min-width: 160px;
+  min-width: 140px;
 }
 .world-selector:hover { background: var(--color-surface-2); }
+
+.btn-header-icon {
+  padding: 4px 10px;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-gold);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-header-icon:hover {
+  background: var(--color-gold-glow);
+  border-color: var(--color-gold);
+}
 .world-selector__name {
   font-weight: 500;
   font-size: 0.9rem;

@@ -207,8 +207,151 @@ async def atualizar_inventario(
             quantity=item_data.get("quantity", 1),
             description=item_data.get("description"),
         )
-        db.add(item)
-        new_items.append(item)
-
     await db.flush()
     return new_items
+
+
+# ── Wikilinks, Autocomplete & Backlinks ───────────────────────────────────────
+
+import re
+
+WIKILINK_REGEX = re.compile(r"\[\[([^\]\|]+)(?:\|([^\]]+))?\]\]")
+
+
+def extract_wikilinks(content: str) -> list[tuple[str, str | None]]:
+    """
+    Extrai todas as citações [[Artigo]] ou [[Artigo|Rótulo]] de um texto.
+    Retorna lista de tuplas (target_title, display_text).
+    """
+    if not content:
+        return []
+    matches = WIKILINK_REGEX.findall(content)
+    return [(m[0].strip(), m[1].strip() if m[1] else None) for m in matches if m[0].strip()]
+
+
+async def resolver_artigo_por_titulo(
+    db: AsyncSession,
+    world_id: uuid.UUID,
+    title: str,
+    role: UserRole,
+) -> dict:
+    """
+    Busca um artigo pelo título exato (case-insensitive).
+    Respeita a Névoa de Guerra (Fog of War).
+    """
+    stmt = (
+        select(Article)
+        .where(Article.world_id == world_id, Article.title.ilike(title.strip()))
+    )
+    result = await db.execute(stmt)
+    article = result.scalars().first()
+
+    if not article:
+        return {
+            "exists": False,
+            "article_id": None,
+            "title": title.strip(),
+            "visibility": None,
+            "is_locked": False,
+        }
+
+    # Fog of War check
+    if role == UserRole.JOGADOR and article.visibility == VisibilityType.NULA:
+        return {
+            "exists": False,
+            "article_id": None,
+            "title": title.strip(),
+            "visibility": None,
+            "is_locked": False,
+        }
+
+    is_locked = role == UserRole.JOGADOR and article.visibility == VisibilityType.PARCIAL
+    return {
+        "exists": True,
+        "article_id": article.id,
+        "title": article.title,
+        "visibility": article.visibility,
+        "is_locked": is_locked,
+    }
+
+
+async def buscar_mencao_sugestoes(
+    db: AsyncSession,
+    world_id: uuid.UUID,
+    query: str,
+    role: UserRole,
+    limit: int = 10,
+) -> list[Article]:
+    """
+    Busca artigos por título (autocomplete) para menções/wikilinks.
+    Filtra Névoa de Guerra NULA para jogadores.
+    """
+    stmt = (
+        select(Article)
+        .options(selectinload(Article.tags))
+        .where(Article.world_id == world_id)
+    )
+
+    if role == UserRole.JOGADOR:
+        stmt = stmt.where(Article.visibility != VisibilityType.NULA)
+
+    if query.strip():
+        stmt = stmt.where(Article.title.ilike(f"%{query.strip()}%"))
+
+    stmt = stmt.order_by(Article.title.asc()).limit(limit)
+    result = await db.execute(stmt)
+    return result.scalars().all()
+
+
+async def buscar_backlinks(
+    db: AsyncSession,
+    world_id: uuid.UUID,
+    article_id: uuid.UUID,
+    role: UserRole,
+) -> list[dict]:
+    """
+    Busca todas as seções de artigos no mundo que mencionam o título do artigo atual.
+    Retorna lista de referências (backlinks) sanitizadas respeitando a Névoa de Guerra.
+    """
+    # 1. Obter o artigo alvo para saber o seu título
+    target_article = await buscar_artigo(db, article_id, world_id)
+    if not target_article:
+        return []
+
+    target_title = target_article.title.lower()
+
+    # 2. Buscar seções de artigos do mesmo mundo (excluindo o próprio artigo)
+    stmt = (
+        select(ArticleSection, Article)
+        .join(Article, ArticleSection.article_id == Article.id)
+        .where(Article.world_id == world_id, Article.id != article_id)
+    )
+
+    if role == UserRole.JOGADOR:
+        stmt = stmt.where(Article.visibility != VisibilityType.NULA)
+
+    result = await db.execute(stmt)
+    rows = result.all()
+
+    backlinks = []
+    for section, source_article in rows:
+        content_lower = section.content.lower()
+        if f"[[{target_title}" in content_lower:
+            is_locked = role == UserRole.JOGADOR and source_article.visibility == VisibilityType.PARCIAL
+
+            # Extrai um pequeno trecho (snippet)
+            idx = content_lower.find(f"[[{target_title}")
+            start = max(0, idx - 40)
+            end = min(len(section.content), idx + len(target_title) + 50)
+            snippet = ("..." if start > 0 else "") + section.content[start:end] + ("..." if end < len(section.content) else "")
+
+            backlinks.append({
+                "article_id": source_article.id,
+                "title": source_article.title,
+                "visibility": source_article.visibility,
+                "section_title": section.title,
+                "snippet": snippet if not is_locked else "Conteúdo protegido por Névoa de Guerra Parcial.",
+                "is_locked": is_locked,
+            })
+
+    return backlinks

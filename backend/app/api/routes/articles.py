@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps.database import get_db
@@ -13,14 +13,59 @@ from app.schemas.article import (
     ArticleCreate,
     ArticleDetailOut,
     ArticleListOut,
+    ArticleResolveOut,
     ArticleUpdate,
+    BacklinkOut,
     InventoryItemOut,
     InventoryUpdateInput,
+    MentionSuggestionOut,
+    ObsidianImportResultOut,
 )
-from app.services import article_service
+from app.services import article_service, obsidian_import_service
 from app.services.fog_of_war import sanitize_article_detail, sanitize_article_for_list
 
 router = APIRouter()
+
+
+# ── GET /worlds/{world_id}/articles/resolve ───────────────────────────────────
+
+@router.get(
+    "/resolve",
+    response_model=ArticleResolveOut,
+    summary="Resolve rapidamente um Wikilink pelo título",
+)
+async def resolver_wikilink(
+    title: str,
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Verifica se um artigo existe pelo título e retorna seu ID/visibilidade."""
+    return await article_service.resolver_artigo_por_titulo(db, ctx.world_id, title, ctx.role)
+
+
+# ── GET /worlds/{world_id}/articles/search-mentions ───────────────────────────
+
+@router.get(
+    "/search-mentions",
+    response_model=list[MentionSuggestionOut],
+    summary="Autocomplete de sugestões para menções e Wikilinks",
+)
+async def autocomplete_mencoes(
+    query: str = "",
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Busca até 10 artigos por título para autocomplete no editor de texto."""
+    articles = await article_service.buscar_mencao_sugestoes(db, ctx.world_id, query, ctx.role)
+    return [
+        MentionSuggestionOut(
+            id=a.id,
+            title=a.title,
+            visibility=a.visibility,
+            tags=[t.name for t in a.tags] if hasattr(a, "tags") and a.tags else [],
+        )
+        for a in articles
+    ]
 
 
 # ── GET /worlds/{world_id}/articles ───────────────────────────────────────────
@@ -212,3 +257,67 @@ async def atualizar_inventario(
         )
         for item in items
     ]
+
+
+# ── GET /worlds/{world_id}/articles/{article_id}/backlinks ────────────────────
+
+@router.get(
+    "/{article_id}/backlinks",
+    response_model=list[BacklinkOut],
+    summary="Obtém lista de backlinks/citações que apontam para este artigo",
+)
+async def buscar_backlinks(
+    article_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """Retorna referências de outros artigos que citam o artigo atual no formato [[Título]]."""
+    return await article_service.buscar_backlinks(db, ctx.world_id, article_id, ctx.role)
+
+
+# ── POST /worlds/{world_id}/articles/import/obsidian ─────────────────────────
+
+@router.post(
+    "/import/obsidian",
+    response_model=ObsidianImportResultOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Importa um cofre Obsidian em formato .zip",
+)
+async def importar_cofre_obsidian(
+    file: UploadFile = File(...),
+    use_folders_as_tags: bool = Form(False),
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """
+    Importa um cofre do Obsidian (.zip) no Codex do mundo ativo.
+    Apenas o Mestre pode importar.
+    Aplica Obscurecimento Total (Visão Nula) por padrão para resguardar a lore.
+    """
+    if not ctx.is_mestre:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Apenas o Mestre do mundo pode importar cofres de notas."
+        )
+
+    if not file.filename or not file.filename.lower().endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="O arquivo enviado deve ser do tipo .zip."
+        )
+
+    zip_bytes = await file.read()
+    res = await obsidian_import_service.processar_zip_obsidian(
+        db,
+        ctx.world_id,
+        ctx.user.id,
+        zip_bytes,
+        use_folders_as_tags=use_folders_as_tags,
+    )
+    await db.commit()
+
+    return ObsidianImportResultOut(
+        imported_count=res["imported_count"],
+        skipped_count=res["skipped_count"],
+        message=f"{res['imported_count']} notas importadas com sucesso com Obscurecimento Total (Visão Nula).",
+    )

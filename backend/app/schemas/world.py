@@ -20,11 +20,22 @@ class WorldOut(BaseModel):
     id: uuid.UUID
     name: str
     description: str | None
+    invite_code: str
     owner_id: uuid.UUID
     created_at: datetime
     role: UserRole | None = None  # papel do usuário logado neste mundo
 
     model_config = {"from_attributes": True}
+
+
+class WorldInviteInfoOut(BaseModel):
+    """Informações públicas do mundo exibidas na tela de convite /join/:code."""
+    invite_code: str
+    world_id: uuid.UUID
+    world_name: str
+    world_description: str | None
+    owner_username: str
+    members_count: int
 
 
 class WorldMemberOut(BaseModel):

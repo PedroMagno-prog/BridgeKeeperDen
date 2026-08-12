@@ -37,9 +37,34 @@ export interface Article {
   is_locked: boolean
 }
 
+export interface ArticleResolveResult {
+  exists: boolean
+  article_id: string | null
+  title: string
+  visibility: Visibility | null
+  is_locked: boolean
+}
+
+export interface MentionSuggestion {
+  id: string
+  title: string
+  visibility: Visibility
+  tags: string[]
+}
+
+export interface BacklinkItem {
+  article_id: string
+  title: string
+  visibility: Visibility
+  section_title: string
+  snippet: string
+  is_locked: boolean
+}
+
 export const useArticlesStore = defineStore('articles', () => {
   const articles = ref<Article[]>([])
   const current = ref<Article | null>(null)
+  const currentBacklinks = ref<BacklinkItem[]>([])
   const loading = ref(false)
   const searchQuery = ref('')
   const tagFilter = ref('')
@@ -68,6 +93,33 @@ export const useArticlesStore = defineStore('articles', () => {
     if (!worldId) return
     const { data } = await api.get<Article>(`/worlds/${worldId}/articles/${id}`)
     current.value = data
+    fetchBacklinks(id)
+    return data
+  }
+
+  async function resolveArticle(title: string): Promise<ArticleResolveResult | null> {
+    const worldId = wid()
+    if (!worldId) return null
+    const { data } = await api.get<ArticleResolveResult>(`/worlds/${worldId}/articles/resolve`, {
+      params: { title },
+    })
+    return data
+  }
+
+  async function searchMentions(query: string): Promise<MentionSuggestion[]> {
+    const worldId = wid()
+    if (!worldId) return []
+    const { data } = await api.get<MentionSuggestion[]>(`/worlds/${worldId}/articles/search-mentions`, {
+      params: { query },
+    })
+    return data
+  }
+
+  async function fetchBacklinks(articleId: string): Promise<BacklinkItem[]> {
+    const worldId = wid()
+    if (!worldId) return []
+    const { data } = await api.get<BacklinkItem[]>(`/worlds/${worldId}/articles/${articleId}/backlinks`)
+    currentBacklinks.value = data
     return data
   }
 
@@ -107,8 +159,26 @@ export const useArticlesStore = defineStore('articles', () => {
     return data
   }
 
+  async function importObsidianVault(file: File, useFoldersAsTags: boolean) {
+    const worldId = wid()
+    if (!worldId) throw new Error('Nenhum mundo selecionado.')
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('use_folders_as_tags', String(useFoldersAsTags))
+
+    const { data } = await api.post<{ imported_count: number; skipped_count: number; message: string }>(
+      `/worlds/${worldId}/articles/import/obsidian`,
+      formData,
+      { headers: { 'Content-Type': 'multipart/form-data' } }
+    )
+
+    await fetchArticles()
+    return data
+  }
+
   return {
-    articles, current, loading, searchQuery, tagFilter,
-    fetchArticles, fetchArticle, createArticle, updateArticle, deleteArticle, updateInventory,
+    articles, current, currentBacklinks, loading, searchQuery, tagFilter,
+    fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory, importObsidianVault,
   }
 })

@@ -94,3 +94,41 @@ class ArticleDetailOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_locked: bool = False
+
+
+# ── Wikilinks & Menções ───────────────────────────────────────────────────────
+
+class ArticleResolveOut(BaseModel):
+    """Resultado da resolução rápida de um Wikilink por título."""
+    exists: bool
+    article_id: uuid.UUID | None = None
+    title: str
+    visibility: VisibilityType | None = None
+    is_locked: bool = False
+
+
+class MentionSuggestionOut(BaseModel):
+    """Sugestão de artigo para o menu de autocomplete de menções."""
+    id: uuid.UUID
+    title: str
+    visibility: VisibilityType
+    tags: list[str] = []
+
+
+class BacklinkOut(BaseModel):
+    """Informação de uma citação (backlink) que aponta para um artigo."""
+    article_id: uuid.UUID
+    title: str
+    visibility: VisibilityType
+    section_title: str
+    snippet: str
+    is_locked: bool = False
+
+
+# ── Importação Obsidian ───────────────────────────────────────────────────────
+
+class ObsidianImportResultOut(BaseModel):
+    """Resultado da importação em lote de cofre Obsidian (.zip)."""
+    imported_count: int
+    skipped_count: int
+    message: str

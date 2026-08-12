@@ -163,15 +163,37 @@ def sanitize_article_detail(article: Any, role: UserRole) -> dict | None:
     }
 
 
+def _get_target_article_summary(pin: Any, role: UserRole) -> dict | None:
+    if not hasattr(pin, "target_article") or not pin.target_article:
+        return None
+    art = pin.target_article
+    if role == UserRole.JOGADOR and art.visibility == VisibilityType.NULA:
+        return None
+    first_sec = None
+    if hasattr(art, "sections") and art.sections:
+        if role == UserRole.MESTRE or art.visibility == VisibilityType.TOTAL:
+            first_sec = art.sections[0].content if art.sections[0].content else None
+    tags = [t.name for t in art.tags] if hasattr(art, "tags") and art.tags else []
+    return {
+        "id": art.id,
+        "title": art.title,
+        "visibility": art.visibility,
+        "tags": tags,
+        "first_section_preview": first_sec,
+    }
+
+
 def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
     """
     Sanitiza um pin de mapa.
 
-    - MESTRE: retorna tudo.
+    - MESTRE: retorna tudo (com preview do artigo e titulo do sub-mapa).
     - JOGADOR + NULA: retorna None (pin invisivel).
     - JOGADOR + PARCIAL: titulo visivel, icone '?', sem target links.
-    - JOGADOR + TOTAL: retorna tudo.
+    - JOGADOR + TOTAL: retorna tudo (respeitando a visibilidade do artigo alvo).
     """
+    target_map_title = pin.target_map.title if hasattr(pin, "target_map") and pin.target_map else None
+
     if role == UserRole.MESTRE:
         return {
             "id": pin.id,
@@ -184,6 +206,8 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
             "layer_id": pin.layer_id,
             "target_article_id": pin.target_article_id,
             "target_map_id": pin.target_map_id,
+            "target_article": _get_target_article_summary(pin, role),
+            "target_map_title": target_map_title,
             "is_locked": False,
         }
 
@@ -202,6 +226,8 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
             "layer_id": pin.layer_id,
             "target_article_id": None,
             "target_map_id": None,
+            "target_article": None,
+            "target_map_title": None,
             "is_locked": True,
         }
 
@@ -217,6 +243,8 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
         "layer_id": pin.layer_id,
         "target_article_id": pin.target_article_id,
         "target_map_id": pin.target_map_id,
+        "target_article": _get_target_article_summary(pin, role),
+        "target_map_title": target_map_title,
         "is_locked": False,
     }
 

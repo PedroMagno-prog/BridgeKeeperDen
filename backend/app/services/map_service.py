@@ -19,6 +19,9 @@ from app.db.models.map_layer import MapLayer
 from app.db.models.map_pin import MapPin
 
 
+from app.db.models.article import Article
+
+
 async def criar_mapa(
     db: AsyncSession,
     world_id: uuid.UUID,
@@ -31,6 +34,31 @@ async def criar_mapa(
     db.add(mapa)
     await db.flush()
     return mapa
+
+
+async def atualizar_mapa(
+    db: AsyncSession,
+    mapa: Map,
+    *,
+    title: str | None = None,
+    image_url: str | None = None,
+) -> Map:
+    """Atualiza dados de um mapa."""
+    if title is not None:
+        mapa.title = title
+    if image_url is not None:
+        mapa.image_url = image_url
+    await db.flush()
+    return mapa
+
+
+async def deletar_mapa(
+    db: AsyncSession,
+    mapa: Map,
+) -> None:
+    """Deleta um mapa (CASCADE deleta layers e pins)."""
+    await db.delete(mapa)
+    await db.flush()
 
 
 async def listar_mapas(
@@ -51,12 +79,14 @@ async def buscar_mapa(
     map_id: uuid.UUID,
     world_id: uuid.UUID,
 ) -> Map | None:
-    """Busca um mapa com layers e pins carregados."""
+    """Busca um mapa com layers, pins e entidades associadas carregados."""
     stmt = (
         select(Map)
         .options(
             selectinload(Map.layers),
-            selectinload(Map.pins),
+            selectinload(Map.pins).selectinload(MapPin.target_article).selectinload(Article.sections),
+            selectinload(Map.pins).selectinload(MapPin.target_article).selectinload(Article.tags),
+            selectinload(Map.pins).selectinload(MapPin.target_map),
         )
         .where(Map.id == map_id, Map.world_id == world_id)
     )
@@ -133,3 +163,38 @@ async def atualizar_pin(
             setattr(pin, campo, valor)
     await db.flush()
     return pin
+
+
+async def atualizar_posicao_pin(
+    db: AsyncSession,
+    pin_id: uuid.UUID,
+    map_id: uuid.UUID,
+    x_position: Decimal,
+    y_position: Decimal,
+) -> MapPin | None:
+    """Atualizacao rapida das coordenadas relativas x/y no drag-and-drop."""
+    pin = await buscar_pin(db, pin_id, map_id)
+    if not pin:
+        return None
+    pin.x_position = x_position
+    pin.y_position = y_position
+    await db.flush()
+    return pin
+
+
+async def deletar_pin(
+    db: AsyncSession,
+    pin: MapPin,
+) -> None:
+    """Deleta um marcador do mapa."""
+    await db.delete(pin)
+    await db.flush()
+
+
+async def deletar_layer(
+    db: AsyncSession,
+    layer: MapLayer,
+) -> None:
+    """Deleta uma camada do mapa."""
+    await db.delete(layer)
+    await db.flush()
