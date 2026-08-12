@@ -18,3 +18,4 @@ from app.db.models.timeline_era import TimelineEra  # noqa: F401
 from app.db.models.inventory_group import InventoryGroup  # noqa: F401
 from app.db.models.inventory import Inventory  # noqa: F401
 from app.db.models.inventory_item import InventoryItem  # noqa: F401
+from app.db.models.quest import Quest, QuestObjective, QuestStatus, QuestCategory  # noqa: F401
