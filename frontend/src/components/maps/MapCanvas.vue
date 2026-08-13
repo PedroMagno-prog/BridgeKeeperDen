@@ -25,6 +25,7 @@ const imageRef = ref<HTMLImageElement | null>(null)
 
 // Transformação da Câmera (Pan & Zoom)
 const zoom = ref(1)
+const mapOpacity = ref(1)
 const panX = ref(0)
 const panY = ref(0)
 const isPanning = ref(false)
@@ -46,11 +47,11 @@ const visiblePins = computed(() => {
 })
 
 function zoomIn() {
-  zoom.value = Math.min(3, zoom.value + 0.25)
+  zoom.value = Math.min(5, Number((zoom.value + 0.25).toFixed(2)))
 }
 
 function zoomOut() {
-  zoom.value = Math.max(0.5, zoom.value - 0.25)
+  zoom.value = Math.max(0.1, Number((zoom.value - 0.25).toFixed(2)))
 }
 
 function resetView() {
@@ -61,8 +62,8 @@ function resetView() {
 
 function handleWheel(e: WheelEvent) {
   e.preventDefault()
-  const delta = e.deltaY < 0 ? 0.15 : -0.15
-  const newZoom = Math.min(3, Math.max(0.5, zoom.value + delta))
+  const delta = e.deltaY < 0 ? 0.1 : -0.1
+  const newZoom = Math.min(5, Math.max(0.1, Number((zoom.value + delta).toFixed(2))))
   zoom.value = newZoom
 }
 
@@ -150,12 +151,27 @@ function getIconEmoji(icon: string): string {
     @mouseleave="handleMouseUp"
     @wheel="handleWheel"
   >
-    <!-- Controles de Zoom -->
+    <!-- Controles de Zoom e Opacidade -->
     <div class="zoom-controls">
-      <button class="zoom-btn" title="Aumentar Zoom" @click="zoomIn">+</button>
+      <button class="zoom-btn" title="Aumentar Zoom (+)" @click="zoomIn">+</button>
       <span class="zoom-label">{{ Math.round(zoom * 100) }}%</span>
-      <button class="zoom-btn" title="Diminuir Zoom" @click="zoomOut">-</button>
+      <button class="zoom-btn" title="Diminuir Zoom (-)" @click="zoomOut">-</button>
       <button class="zoom-btn reset-btn" title="Resetar Câmera" @click="resetView">🔄</button>
+
+      <div class="control-divider"></div>
+
+      <!-- Slider de Opacidade -->
+      <div class="opacity-control" title="Opacidade da Imagem de Fundo">
+        <span class="opacity-label">👁️ {{ Math.round(mapOpacity * 100) }}%</span>
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.05"
+          v-model.number="mapOpacity"
+          class="opacity-slider"
+        />
+      </div>
     </div>
 
     <!-- Área Transformada do Mapa -->
@@ -171,6 +187,7 @@ function getIconEmoji(icon: string): string {
         :src="mapDetail.image_url"
         :alt="mapDetail.title"
         class="map-image"
+        :style="{ opacity: mapOpacity }"
         draggable="false"
       />
 
@@ -268,6 +285,34 @@ function getIconEmoji(icon: string): string {
 }
 
 .reset-btn { font-size: 0.8rem; }
+
+.control-divider {
+  width: 100%;
+  border-top: 1px solid var(--color-border);
+  margin: 4px 0;
+}
+
+.opacity-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.opacity-label {
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  text-align: center;
+  font-weight: 600;
+}
+
+.opacity-slider {
+  width: 50px;
+  height: 4px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+}
 
 /* Canvas Area */
 .canvas-area {

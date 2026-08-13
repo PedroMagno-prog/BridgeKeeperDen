@@ -139,12 +139,12 @@ async function handleSectionImageUpload(index: number, event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   const a = articlesStore.current
   const sec = editSections.value[index]
-  if (!file || !a || !sec.id) return
+  if (!file || !a || !sec || !sec.id) return
 
   uploadingImageIndex.value = index
   try {
     const url = await articlesStore.uploadSectionImage(a.id, sec.id, file)
-    if (url) {
+    if (url && sec) {
       sec.image_url = url
       await articlesStore.fetchArticle(a.id)
     }
