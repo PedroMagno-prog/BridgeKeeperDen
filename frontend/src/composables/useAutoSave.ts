@@ -1,79 +1,100 @@
-import { ref, watch, onUnmounted } from 'vue'
+import { ref, onUnmounted } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 
-export type AutoSaveStatus = 'SAVED' | 'SAVING' | 'PENDING' | 'ERROR'
+export type AutoSaveStatus = 'idle' | 'modified' | 'saving' | 'saved' | 'error'
 
-export function useAutoSave<T>(
-  source: () => T,
-  saveFn: (data: T) => Promise<void>,
-  delayMs = 3000
+export function useAutoSave(
+  saveFn: (content: string) => Promise<void>,
+  delayMs = 800
 ) {
-  const status = ref<AutoSaveStatus>('SAVED')
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let pendingData: T | null = null
-  let isSaving = false
+  const status = ref<AutoSaveStatus>('idle')
+  const lastSavedAt = ref<Date | null>(null)
 
-  const triggerSave = async () => {
-    if (!pendingData || isSaving) return
-    const dataToSave = pendingData
-    pendingData = null
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pendingContent: string | null = null
+  let isSaving = false
+  let idleTimer: ReturnType<typeof setTimeout> | null = null
+
+  const flushSave = async () => {
+    if (pendingContent === null || isSaving) return
+    const contentToSave = pendingContent
+    pendingContent = null
+
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
 
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+
     isSaving = true
-    status.value = 'SAVING'
+    status.value = 'saving'
+
     try {
-      await saveFn(dataToSave)
-      status.value = 'SAVED'
+      await saveFn(contentToSave)
+      status.value = 'saved'
+      lastSavedAt.value = new Date()
+
+      // Voltar suavemente para 'idle' após 2.5 segundos
+      idleTimer = setTimeout(() => {
+        if (status.value === 'saved') {
+          status.value = 'idle'
+        }
+      }, 2500)
     } catch (err) {
-      status.value = 'ERROR'
-      console.error('Erro no Auto-Save:', err)
-      // Restaurar pendingData se falhou para tentar novamente
-      pendingData = dataToSave
+      status.value = 'error'
+      console.error('Erro no salvamento automático:', err)
+      pendingContent = contentToSave
     } finally {
       isSaving = false
     }
   }
 
-  // Monitora alterações nos dados
-  watch(
-    source,
-    (newData) => {
-      if (!newData) return
-      pendingData = JSON.parse(JSON.stringify(newData))
-      status.value = 'PENDING'
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(triggerSave, delayMs)
-    },
-    { deep: true }
-  )
+  const triggerChange = (newContent: string) => {
+    pendingContent = newContent
+    status.value = 'modified'
 
-  // Salva imediatamente se o usuário tentar mudar de rota
-  onBeforeRouteLeave(async () => {
-    if (timer) clearTimeout(timer)
-    if (pendingData) {
-      await triggerSave()
+    if (timer) {
+      clearTimeout(timer)
     }
-  })
-
-  // Salva se o componente for desmontado
-  onUnmounted(async () => {
-    if (timer) clearTimeout(timer)
-    if (pendingData) {
-      await triggerSave()
-    }
-  })
+    timer = setTimeout(flushSave, delayMs)
+  }
 
   const resetStatus = () => {
     if (timer) {
       clearTimeout(timer)
       timer = null
     }
-    pendingData = null
-    status.value = 'SAVED'
+    if (idleTimer) {
+      clearTimeout(idleTimer)
+      idleTimer = null
+    }
+    pendingContent = null
+    status.value = 'idle'
   }
 
-  return { status, triggerSave, resetStatus }
+  // Tenta salvar alterações pendentes antes de mudar de rota
+  onBeforeRouteLeave(async () => {
+    if (pendingContent !== null) {
+      await flushSave()
+    }
+  })
+
+  // Tenta salvar alterações pendentes ao desmontar o componente
+  onUnmounted(async () => {
+    if (pendingContent !== null) {
+      await flushSave()
+    }
+  })
+
+  return {
+    status,
+    lastSavedAt,
+    triggerChange,
+    flushSave,
+    resetStatus,
+  }
 }

@@ -13,6 +13,7 @@ import ObsidianImportModal from '@/components/codex/ObsidianImportModal.vue'
 import PermissionsModal from '@/components/ui/PermissionsModal.vue'
 import FolderTree from '@/components/codex/FolderTree.vue'
 import FolderModal from '@/components/codex/FolderModal.vue'
+import ArticleEditor from '@/components/codex/ArticleEditor.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -347,17 +348,14 @@ function formatDate(iso: string) {
           <span class="meta-date">Atualizado: {{ formatDate(articlesStore.current.updated_at) }}</span>
         </div>
 
-        <div class="detail-sections">
-          <div v-for="section in articlesStore.current.sections" :key="section.id" class="section-block">
-            <h3 class="section-block__title">{{ section.title }}</h3>
-            <div v-if="section.image_url" class="section-block__image-container">
-              <img :src="section.image_url" alt="Imagem da Seção" class="section-block__image" />
-            </div>
-            <div class="section-block__content">
-              <WikilinkText :text="section.content" />
-            </div>
-          </div>
-          <div v-if="!articlesStore.current.sections?.length" class="list-empty" style="padding: 2rem;">Sem seções.</div>
+        <!-- Unified Markdown Live Preview Editor (Etapa 11) -->
+        <div class="detail-sections mt-4 min-h-[500px] h-[calc(100vh-280px)]">
+          <ArticleEditor
+            :key="articlesStore.current.id"
+            :article-id="articlesStore.current.id"
+            :initial-content="articlesStore.current.content || ''"
+            :readonly="!canEdit"
+          />
         </div>
 
 
