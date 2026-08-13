@@ -37,15 +37,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _resolve_database_url(self) -> "Settings":
-        """
-        Garante que DATABASE_URL sempre termine com o driver correto.
-
-        Regras:
-        - Se DATABASE_URL já foi definida no .env (ex: URL de nuvem),
-          substitui 'postgres://' e 'postgresql://' por 'postgresql+asyncpg://'.
-        - Caso contrário, monta a URL a partir dos campos individuais
-          (POSTGRES_HOST, PORT, USER, PASSWORD, DB) — fluxo local padrão.
-        """
         if self.DATABASE_URL:
             url = self.DATABASE_URL
             # Normaliza prefixos comuns fornecidos por provedores de nuvem
@@ -53,6 +44,11 @@ class Settings(BaseSettings):
                 if url.startswith(old_prefix):
                     url = "postgresql+asyncpg://" + url[len(old_prefix):]
                     break
+            
+            # Converte sslmode= para ssl= (exigência do driver asyncpg)
+            if "sslmode=" in url:
+                url = url.replace("sslmode=", "ssl=")
+                
             self.DATABASE_URL = url
         else:
             self.DATABASE_URL = (
