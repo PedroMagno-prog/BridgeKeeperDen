@@ -13,8 +13,10 @@ from app.core.security import criar_access_token
 
 @pytest.mark.asyncio
 async def test_maps_and_pins_flow():
+    import uuid
+    suffix = uuid.uuid4().hex[:6]
     async with AsyncSessionLocal() as db:
-        user = User(username="map_test_user", email="map_test@example.com", password_hash="hash")
+        user = User(username=f"map_test_user_{suffix}", email=f"map_test_{suffix}@example.com", password_hash="hash")
         db.add(user)
         await db.flush()
 

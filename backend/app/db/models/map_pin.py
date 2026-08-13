@@ -67,6 +67,12 @@ class MapPin(Base):
         nullable=False,
         default=VisibilityType.NULA,
     )
+    created_by: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="ID do usuario criador do marcador",
+    )
 
     # ── Relacionamentos ───────────────────────────────────────────────────────
     map: Mapped["Map"] = relationship(

@@ -133,7 +133,7 @@ async def buscar_mapa(
 
     sanitized_pins = []
     for pin in mapa.pins:
-        s = sanitize_pin(pin, ctx.role)
+        s = sanitize_pin(pin, ctx.role, ctx.user.id)
         if s is not None:
             sanitized_pins.append(s)
 
@@ -223,13 +223,35 @@ async def criar_pin(
     db: AsyncSession = Depends(get_db),
     ctx: WorldContext = Depends(get_world_ctx),
 ):
-    """Cria um novo marcador no mapa. Apenas MESTRE."""
-    if not ctx.is_mestre:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas o Mestre pode criar marcadores.")
-
+    """Cria um novo marcador no mapa. Mestre ou Jogador."""
     mapa = await map_service.buscar_mapa(db, map_id, ctx.world_id)
     if not mapa:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mapa nao encontrado.")
+
+    vis = body.visibility
+    if not ctx.is_mestre:
+        vis = VisibilityType.CONTROLADO
+
+        # Valida que o jogador não vinculou um artigo Nula
+        if body.target_article_id:
+            from app.services import article_service
+            from app.db.models.article_user_permission import ArticleUserPermission
+            from app.services.fog_of_war import resolve_effective_visibility
+
+            art = await article_service.buscar_artigo(db, body.target_article_id, ctx.world_id)
+            if not art:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Artigo vinculado não encontrado.")
+
+            perm_res = await db.execute(
+                select(ArticleUserPermission.visibility).where(
+                    ArticleUserPermission.article_id == body.target_article_id,
+                    ArticleUserPermission.user_id == ctx.user.id,
+                )
+            )
+            spec_perm = perm_res.scalar_one_or_none()
+            eff_vis, _, _ = resolve_effective_visibility(art.visibility, art.created_by, ctx.user.id, ctx.role, spec_perm)
+            if eff_vis == VisibilityType.NULA:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não é permitido vincular marcadores a artigos com visão Nula.")
 
     pin = await map_service.criar_pin(
         db,
@@ -239,17 +261,18 @@ async def criar_pin(
         y_position=body.y_position,
         icon=body.icon,
         color=body.color,
-        visibility=body.visibility,
+        visibility=vis,
         layer_id=body.layer_id,
         target_article_id=body.target_article_id,
-        target_map_id=body.target_map_id,
+        target_map_id=body.target_map_id if ctx.is_mestre else None,
+        created_by=ctx.user.id,
     )
     await db.commit()
     
     # Recarrega o mapa para ter os relacionamentos target_article e target_map populados
     reloaded_map = await map_service.buscar_mapa(db, map_id, ctx.world_id)
     reloaded_pin = next((p for p in reloaded_map.pins if p.id == pin.id), pin)
-    return sanitize_pin(reloaded_pin, ctx.role)
+    return sanitize_pin(reloaded_pin, ctx.role, ctx.user.id)
 
 
 # ── PUT /worlds/{world_id}/maps/{map_id}/pins/{pin_id} ───────────────────────
@@ -266,21 +289,44 @@ async def atualizar_pin(
     db: AsyncSession = Depends(get_db),
     ctx: WorldContext = Depends(get_world_ctx),
 ):
-    """Atualiza posicao, icone, cor ou visibilidade de um marcador. Apenas MESTRE."""
-    if not ctx.is_mestre:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas o Mestre pode editar marcadores.")
-
+    """Atualiza posicao, icone, cor ou visibilidade de um marcador. Mestre ou Criador."""
     pin = await map_service.buscar_pin(db, pin_id, map_id)
     if not pin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Marcador nao encontrado.")
 
+    if not ctx.is_mestre and (not pin.created_by or str(pin.created_by) != str(ctx.user.id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas o Mestre ou o criador deste marcador pode edita-lo.")
+
     update_data = body.model_dump(exclude_unset=True)
+    if not ctx.is_mestre:
+        update_data.pop("visibility", None)
+        update_data.pop("target_map_id", None)
+        if update_data.get("target_article_id"):
+            from app.services import article_service
+            from app.db.models.article_user_permission import ArticleUserPermission
+            from app.services.fog_of_war import resolve_effective_visibility
+
+            art = await article_service.buscar_artigo(db, update_data["target_article_id"], ctx.world_id)
+            if not art:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Artigo vinculado não encontrado.")
+
+            perm_res = await db.execute(
+                select(ArticleUserPermission.visibility).where(
+                    ArticleUserPermission.article_id == update_data["target_article_id"],
+                    ArticleUserPermission.user_id == ctx.user.id,
+                )
+            )
+            spec_perm = perm_res.scalar_one_or_none()
+            eff_vis, _, _ = resolve_effective_visibility(art.visibility, art.created_by, ctx.user.id, ctx.role, spec_perm)
+            if eff_vis == VisibilityType.NULA:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Não é permitido vincular marcadores a artigos com visão Nula.")
+
     await map_service.atualizar_pin(db, pin, **update_data)
     await db.commit()
 
     reloaded_map = await map_service.buscar_mapa(db, map_id, ctx.world_id)
     reloaded_pin = next((p for p in reloaded_map.pins if p.id == pin.id), pin)
-    return sanitize_pin(reloaded_pin, ctx.role)
+    return sanitize_pin(reloaded_pin, ctx.role, ctx.user.id)
 
 
 # ── DELETE /worlds/{world_id}/maps/{map_id}/pins/{pin_id} ────────────────────
@@ -296,13 +342,13 @@ async def deletar_pin(
     db: AsyncSession = Depends(get_db),
     ctx: WorldContext = Depends(get_world_ctx),
 ):
-    """Remove um marcador. Apenas MESTRE."""
-    if not ctx.is_mestre:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas o Mestre pode deletar marcadores.")
-
+    """Remove um marcador. Mestre ou Criador."""
     pin = await map_service.buscar_pin(db, pin_id, map_id)
     if not pin:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Marcador nao encontrado.")
+
+    if not ctx.is_mestre and (not pin.created_by or str(pin.created_by) != str(ctx.user.id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Apenas o Mestre ou o criador deste marcador pode deleta-lo.")
 
     await map_service.deletar_pin(db, pin)
     await db.commit()

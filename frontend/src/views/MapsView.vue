@@ -152,7 +152,6 @@ function exploreSubMap(mapId: string) {
           <!-- Ações do Mestre e Camadas -->
           <div class="toolbar-actions">
             <button
-              v-if="isMestre"
               class="toolbar-btn"
               :class="{ 'toolbar-btn--active': isDragMode }"
               title="Alterna modo para arrastar coordenadas de pins"
@@ -161,7 +160,7 @@ function exploreSubMap(mapId: string) {
               🖐️ {{ isDragMode ? 'Mover Marcadores ON' : 'Mover Marcadores' }}
             </button>
 
-            <button v-if="isMestre" class="toolbar-btn" @click="openCreatePinModal">
+            <button class="toolbar-btn" @click="openCreatePinModal">
               📍 Novo Marcador
             </button>
 

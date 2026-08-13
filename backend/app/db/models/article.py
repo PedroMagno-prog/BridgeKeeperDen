@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import uuid
 
-from sqlalchemy import String, BigInteger, ForeignKey, Index, Enum
+from sqlalchemy import String, Text, Integer, BigInteger, ForeignKey, Index, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import UUID, TIMESTAMP
 from sqlalchemy.sql import func
@@ -34,7 +34,17 @@ class Article(Base):
         ForeignKey("worlds.id", ondelete="CASCADE"),
         nullable=False,
     )
+    folder_id: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("article_folders.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(150), nullable=False)
+    content: Mapped[str] = mapped_column(
+        Text, nullable=False, default="", server_default="",
+        comment="Conteúdo do artigo em formato Markdown contínuo",
+    )
     visibility: Mapped[VisibilityType] = mapped_column(
         Enum(VisibilityType, name="visibility_type", create_constraint=False, native_enum=True),
         nullable=False,
@@ -60,14 +70,10 @@ class Article(Base):
 
     # ── Relacionamentos ───────────────────────────────────────────────────────
     world: Mapped["World"] = relationship("World", back_populates="articles")
-    creator: Mapped["User"] = relationship("User", lazy="selectin")
-    sections: Mapped[list["ArticleSection"]] = relationship(
-        "ArticleSection",
-        back_populates="article",
-        cascade="all, delete-orphan",
-        lazy="selectin",
-        order_by="ArticleSection.order_index",
+    folder: Mapped["ArticleFolder | None"] = relationship(
+        "ArticleFolder", back_populates="articles"
     )
+    creator: Mapped["User"] = relationship("User", lazy="selectin")
     tags: Mapped[list["ArticleTag"]] = relationship(
         "ArticleTag",
         back_populates="article",

@@ -6,7 +6,7 @@ from app.db.models.user import User  # noqa: F401
 from app.db.models.world import World  # noqa: F401
 from app.db.models.world_member import WorldMember  # noqa: F401
 from app.db.models.article import Article  # noqa: F401
-from app.db.models.article_section import ArticleSection  # noqa: F401
+from app.db.models.article_folder import ArticleFolder  # noqa: F401
 from app.db.models.article_tag import ArticleTag  # noqa: F401
 from app.db.models.character_inventory import CharacterInventory  # noqa: F401
 from app.db.models.map import Map  # noqa: F401
@@ -19,3 +19,6 @@ from app.db.models.inventory_group import InventoryGroup  # noqa: F401
 from app.db.models.inventory import Inventory  # noqa: F401
 from app.db.models.inventory_item import InventoryItem  # noqa: F401
 from app.db.models.quest import Quest, QuestObjective, QuestStatus, QuestCategory  # noqa: F401
+from app.db.models.article_user_permission import ArticleUserPermission  # noqa: F401
+from app.db.models.inventory_user_permission import InventoryUserPermission  # noqa: F401
+from app.db.models.inventory_group_user_permission import InventoryGroupUserPermission  # noqa: F401

@@ -30,7 +30,10 @@ export interface MapPin {
   target_map_id: string | null
   target_article?: MapPinArticleSummary | null
   target_map_title?: string | null
+  created_by?: string | null
   is_locked: boolean
+  can_edit?: boolean
+  can_delete?: boolean
 }
 
 export interface MapItem { id: string; title: string; image_url: string; created_at: string }

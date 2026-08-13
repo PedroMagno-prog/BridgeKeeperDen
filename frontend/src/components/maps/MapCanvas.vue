@@ -25,6 +25,7 @@ const imageRef = ref<HTMLImageElement | null>(null)
 
 // Transformação da Câmera (Pan & Zoom)
 const zoom = ref(1)
+const mapOpacity = ref(1)
 const panX = ref(0)
 const panY = ref(0)
 const isPanning = ref(false)
@@ -45,25 +46,93 @@ const visiblePins = computed(() => {
   })
 })
 
+function clampPan(x: number, y: number, currentZoom: number) {
+  if (!containerRef.value || !imageRef.value) return { x, y }
+  const containerRect = containerRef.value.getBoundingClientRect()
+
+  const imgWidth = (imageRef.value.naturalWidth || imageRef.value.clientWidth || 800) * currentZoom
+  const imgHeight = (imageRef.value.naturalHeight || imageRef.value.clientHeight || 600) * currentZoom
+
+  // Margem máxima da borda preta permitida (ex: 80px)
+  const marginX = Math.min(80, containerRect.width * 0.2)
+  const marginY = Math.min(80, containerRect.height * 0.2)
+
+  const minX = marginX - imgWidth
+  const maxX = containerRect.width - marginX
+
+  const minY = marginY - imgHeight
+  const maxY = containerRect.height - marginY
+
+  const clampedX = Math.min(maxX, Math.max(minX, x))
+  const clampedY = Math.min(maxY, Math.max(minY, y))
+
+  return { x: clampedX, y: clampedY }
+}
+
+function applyZoomFocal(newZoom: number, focalX?: number, focalY?: number) {
+  if (!containerRef.value) {
+    zoom.value = newZoom
+    return
+  }
+  const containerRect = containerRef.value.getBoundingClientRect()
+  const fx = focalX ?? containerRect.width / 2
+  const fy = focalY ?? containerRect.height / 2
+
+  const oldZoom = zoom.value
+  if (newZoom === oldZoom) return
+
+  const worldX = (fx - panX.value) / oldZoom
+  const worldY = (fy - panY.value) / oldZoom
+
+  const rawPanX = fx - worldX * newZoom
+  const rawPanY = fy - worldY * newZoom
+
+  const clamped = clampPan(rawPanX, rawPanY, newZoom)
+
+  zoom.value = newZoom
+  panX.value = clamped.x
+  panY.value = clamped.y
+}
+
 function zoomIn() {
-  zoom.value = Math.min(3, zoom.value + 0.25)
+  const target = Math.min(5, Number((zoom.value + 0.25).toFixed(2)))
+  applyZoomFocal(target)
 }
 
 function zoomOut() {
-  zoom.value = Math.max(0.5, zoom.value - 0.25)
+  const target = Math.max(0.1, Number((zoom.value - 0.25).toFixed(2)))
+  applyZoomFocal(target)
 }
 
 function resetView() {
   zoom.value = 1
-  panX.value = 0
-  panY.value = 0
+  if (containerRef.value && imageRef.value) {
+    const containerRect = containerRef.value.getBoundingClientRect()
+    const imgWidth = imageRef.value.naturalWidth || imageRef.value.clientWidth || 800
+    const imgHeight = imageRef.value.naturalHeight || imageRef.value.clientHeight || 600
+    const centerX = Math.max(0, (containerRect.width - imgWidth) / 2)
+    const centerY = Math.max(0, (containerRect.height - imgHeight) / 2)
+    const clamped = clampPan(centerX, centerY, 1)
+    panX.value = clamped.x
+    panY.value = clamped.y
+  } else {
+    panX.value = 0
+    panY.value = 0
+  }
 }
 
 function handleWheel(e: WheelEvent) {
   e.preventDefault()
+  if (!containerRef.value) return
+
+  const containerRect = containerRef.value.getBoundingClientRect()
+  const mouseX = e.clientX - containerRect.left
+  const mouseY = e.clientY - containerRect.top
+
   const delta = e.deltaY < 0 ? 0.15 : -0.15
-  const newZoom = Math.min(3, Math.max(0.5, zoom.value + delta))
-  zoom.value = newZoom
+  const targetZoom = Math.min(5, Math.max(0.1, Number((zoom.value + delta).toFixed(2))))
+
+  applyZoomFocal(targetZoom, mouseX, mouseY)
 }
 
 // ── Eventos de Pan e Drag ──────────────────────────────────────────────────
@@ -79,8 +148,11 @@ function handleMouseDown(e: MouseEvent) {
 
 function handleMouseMove(e: MouseEvent) {
   if (isPanning.value) {
-    panX.value = e.clientX - dragStart.value.x
-    panY.value = e.clientY - dragStart.value.y
+    const rawX = e.clientX - dragStart.value.x
+    const rawY = e.clientY - dragStart.value.y
+    const clamped = clampPan(rawX, rawY, zoom.value)
+    panX.value = clamped.x
+    panY.value = clamped.y
   } else if (draggingPin.value && containerRef.value && imageRef.value) {
     const rect = imageRef.value.getBoundingClientRect()
     const xPct = Math.min(100, Math.max(0, ((e.clientX - rect.left) / rect.width) * 100))
@@ -102,8 +174,12 @@ function handleMouseUp() {
   }
 }
 
+function canUserDragPin(pin: MapPin): boolean {
+  return props.isMestre || !!pin.can_edit
+}
+
 function startPinDrag(e: MouseEvent, pin: MapPin) {
-  if (props.isMestre && (props.isDragMode || e.shiftKey)) {
+  if (canUserDragPin(pin) && (props.isDragMode || e.shiftKey)) {
     e.stopPropagation()
     draggingPin.value = pin
     selectedPin.value = null
@@ -150,12 +226,27 @@ function getIconEmoji(icon: string): string {
     @mouseleave="handleMouseUp"
     @wheel="handleWheel"
   >
-    <!-- Controles de Zoom -->
+    <!-- Controles de Zoom e Opacidade -->
     <div class="zoom-controls">
-      <button class="zoom-btn" title="Aumentar Zoom" @click="zoomIn">+</button>
+      <button class="zoom-btn" title="Aumentar Zoom (+)" @click="zoomIn">+</button>
       <span class="zoom-label">{{ Math.round(zoom * 100) }}%</span>
-      <button class="zoom-btn" title="Diminuir Zoom" @click="zoomOut">-</button>
+      <button class="zoom-btn" title="Diminuir Zoom (-)" @click="zoomOut">-</button>
       <button class="zoom-btn reset-btn" title="Resetar Câmera" @click="resetView">🔄</button>
+
+      <div class="control-divider"></div>
+
+      <!-- Slider de Opacidade -->
+      <div class="opacity-control" title="Opacidade da Imagem de Fundo">
+        <span class="opacity-label">👁️ {{ Math.round(mapOpacity * 100) }}%</span>
+        <input
+          type="range"
+          min="0.1"
+          max="1"
+          step="0.05"
+          v-model.number="mapOpacity"
+          class="opacity-slider"
+        />
+      </div>
     </div>
 
     <!-- Área Transformada do Mapa -->
@@ -171,6 +262,7 @@ function getIconEmoji(icon: string): string {
         :src="mapDetail.image_url"
         :alt="mapDetail.title"
         class="map-image"
+        :style="{ opacity: mapOpacity }"
         draggable="false"
       />
 
@@ -182,7 +274,7 @@ function getIconEmoji(icon: string): string {
         :class="{
           'map-pin--locked': pin.is_locked,
           'map-pin--selected': selectedPin?.id === pin.id,
-          'map-pin--draggable': isMestre && (isDragMode || draggingPin?.id === pin.id),
+          'map-pin--draggable': canUserDragPin(pin) && (isDragMode || draggingPin?.id === pin.id),
         }"
         :style="{
           left: `${pin.x_position}%`,
@@ -268,6 +360,34 @@ function getIconEmoji(icon: string): string {
 }
 
 .reset-btn { font-size: 0.8rem; }
+
+.control-divider {
+  width: 100%;
+  border-top: 1px solid var(--color-border);
+  margin: 4px 0;
+}
+
+.opacity-control {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding-top: 2px;
+}
+
+.opacity-label {
+  font-size: 0.65rem;
+  color: var(--color-text-dim);
+  text-align: center;
+  font-weight: 600;
+}
+
+.opacity-slider {
+  width: 50px;
+  height: 4px;
+  accent-color: var(--color-gold);
+  cursor: pointer;
+}
 
 /* Canvas Area */
 .canvas-area {

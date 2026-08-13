@@ -1,4 +1,4 @@
-"""Schemas Pydantic para Article, ArticleSection, ArticleTag e CharacterInventory."""
+"""Schemas Pydantic para Article, ArticleFolder, ArticleTag e CharacterInventory."""
 from __future__ import annotations
 
 import uuid
@@ -9,28 +9,57 @@ from pydantic import BaseModel, Field
 from app.db.models.enums import VisibilityType
 
 
-# ── Inputs ────────────────────────────────────────────────────────────────────
+# ── Pastas (ArticleFolder) ───────────────────────────────────────────────────
+
+class ArticleFolderCreate(BaseModel):
+    """Input para criação de uma pasta de artigos."""
+    name: str = Field(..., min_length=1, max_length=255)
+    parent_id: int | None = None
+
+
+class ArticleFolderUpdate(BaseModel):
+    """Input para atualização de uma pasta de artigos."""
+    name: str | None = Field(None, min_length=1, max_length=255)
+    parent_id: int | None = None
+
+
+class ArticleFolderOut(BaseModel):
+    """Output de dados de uma pasta de artigos."""
+    id: int
+    world_id: uuid.UUID
+    parent_id: int | None = None
+    name: str
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+# ── Inputs de Artigo ──────────────────────────────────────────────────────────
 
 class SectionInput(BaseModel):
-    """Input para criacao/atualizacao de uma secao."""
+    """Input legado para seção (compatibilidade)."""
+    id: str | None = None
     title: str = Field(..., min_length=1, max_length=150)
     content: str = Field("", max_length=50_000)
     order_index: int = Field(0, ge=0)
 
 
 class ArticleCreate(BaseModel):
-    """Input para criacao de um artigo."""
+    """Input para criação de um artigo."""
     title: str = Field(..., min_length=1, max_length=150)
+    folder_id: int | None = None
+    content: str = Field("", max_length=500_000)
     visibility: VisibilityType | None = None  # default depende do role (RN-01/RN-02)
     in_game_date: str | None = Field(None, max_length=50)
     in_game_sort_order: int | None = None
     tags: list[str] = Field(default_factory=list)
-    sections: list[SectionInput] = Field(default_factory=list)
+    sections: list[SectionInput] | None = None
 
 
 class ArticleUpdate(BaseModel):
-    """Input para atualizacao de um artigo."""
+    """Input para atualização de um artigo."""
     title: str | None = Field(None, min_length=1, max_length=150)
+    folder_id: int | None = None
+    content: str | None = Field(None, max_length=500_000)
     visibility: VisibilityType | None = None
     in_game_date: str | None = Field(None, max_length=50)
     in_game_sort_order: int | None = None
@@ -38,25 +67,31 @@ class ArticleUpdate(BaseModel):
     sections: list[SectionInput] | None = None
 
 
+class ArticleContentUpdate(BaseModel):
+    """Payload para atualização parcial do conteúdo Markdown (autosave acelerado)."""
+    content: str = Field(..., max_length=500_000)
+
+
 class InventoryItemInput(BaseModel):
-    """Input para um item de inventario."""
+    """Input para um item de inventário."""
     item_name: str = Field(..., min_length=1, max_length=100)
     quantity: int = Field(1, ge=0)
     description: str | None = Field(None, max_length=2000)
 
 
 class InventoryUpdateInput(BaseModel):
-    """Input para atualizacao completa do inventario."""
+    """Input para atualização completa do inventário."""
     items: list[InventoryItemInput]
 
 
-# ── Outputs ───────────────────────────────────────────────────────────────────
+# ── Outputs de Artigo ─────────────────────────────────────────────────────────
 
 class SectionOut(BaseModel):
-    id: uuid.UUID
+    id: str
     title: str
     content: str
     order_index: int
+    image_url: str | None = None
 
 
 class InventoryItemOut(BaseModel):
@@ -67,8 +102,9 @@ class InventoryItemOut(BaseModel):
 
 
 class ArticleListOut(BaseModel):
-    """Artigo em listagem (sem sections)."""
+    """Artigo em listagem."""
     id: uuid.UUID
+    folder_id: int | None = None
     title: str
     visibility: VisibilityType
     in_game_date: str | None = None
@@ -78,12 +114,16 @@ class ArticleListOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_locked: bool = False
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 class ArticleDetailOut(BaseModel):
-    """Artigo em detalhe (com sections e inventory)."""
+    """Artigo em detalhe."""
     id: uuid.UUID
+    folder_id: int | None = None
     title: str
+    content: str = ""
     visibility: VisibilityType
     in_game_date: str | None = None
     in_game_sort_order: int | None = None
@@ -94,6 +134,8 @@ class ArticleDetailOut(BaseModel):
     created_at: datetime | None = None
     updated_at: datetime | None = None
     is_locked: bool = False
+    can_edit: bool = True
+    can_delete: bool = True
 
 
 # ── Wikilinks & Menções ───────────────────────────────────────────────────────
@@ -120,7 +162,7 @@ class BacklinkOut(BaseModel):
     article_id: uuid.UUID
     title: str
     visibility: VisibilityType
-    section_title: str
+    section_title: str = ""
     snippet: str
     is_locked: bool = False
 
@@ -131,4 +173,5 @@ class ObsidianImportResultOut(BaseModel):
     """Resultado da importação em lote de cofre Obsidian (.zip)."""
     imported_count: int
     skipped_count: int
+    folders_created: int = 0
     message: str

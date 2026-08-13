@@ -10,7 +10,6 @@ from sqlalchemy.orm import selectinload
 
 from app.db.models.enums import UserRole, VisibilityType
 from app.db.models.article import Article
-from app.db.models.article_section import ArticleSection
 from app.db.models.quest import Quest
 from app.db.models.map import Map
 from app.db.models.map_pin import MapPin
@@ -38,7 +37,7 @@ async def gerar_grafo_do_mundo(
     # 1. Carregar Artigos
     stmt_art = (
         select(Article)
-        .options(selectinload(Article.sections), selectinload(Article.tags))
+        .options(selectinload(Article.tags))
         .where(Article.world_id == world_id)
     )
     if role == UserRole.JOGADOR:
@@ -155,20 +154,19 @@ async def gerar_grafo_do_mundo(
                     registered_edge_ids.add(edge_id)
                     edges.append(GraphEdge(id=edge_id, source=pin_node_id, target=target_node_id, label="Sub-Mapa"))
 
-    # 4. Extrair Wikilinks [[Artigo]] de Seções de Artigos e Descrições de Quests
+    # 4. Extrair Wikilinks [[Artigo]] do Conteúdo de Artigos e Descrições de Quests
     for art in articles:
         if role == UserRole.JOGADOR and art.visibility == VisibilityType.PARCIAL:
             continue
         source_id = f"article:{art.id}"
-        for sec in art.sections:
-            wikilinks = extract_wikilinks(sec.content)
-            for target_title, _ in wikilinks:
-                target_node_id = title_to_node_id.get(target_title.lower())
-                if target_node_id and target_node_id != source_id:
-                    edge_id = f"{source_id}->{target_node_id}"
-                    if edge_id not in registered_edge_ids:
-                        registered_edge_ids.add(edge_id)
-                        edges.append(GraphEdge(id=edge_id, source=source_id, target=target_node_id, label="Cita"))
+        wikilinks = extract_wikilinks(art.content or "")
+        for target_title, _ in wikilinks:
+            target_node_id = title_to_node_id.get(target_title.lower())
+            if target_node_id and target_node_id != source_id:
+                edge_id = f"{source_id}->{target_node_id}"
+                if edge_id not in registered_edge_ids:
+                    registered_edge_ids.add(edge_id)
+                    edges.append(GraphEdge(id=edge_id, source=source_id, target=target_node_id, label="Cita"))
 
     for q in quests:
         if role == UserRole.JOGADOR and q.visibility == VisibilityType.PARCIAL:

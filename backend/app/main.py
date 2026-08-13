@@ -20,6 +20,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+import os
+from fastapi.staticfiles import StaticFiles
+
+# ── Static Files ──────────────────────────────────────────────────────────────
+static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "static"))
+os.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

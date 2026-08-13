@@ -4,9 +4,10 @@ import type { Visibility } from '@/stores/articles'
 const props = defineProps<{ visibility: Visibility; size?: 'sm' | 'md' }>()
 
 const config: Record<Visibility, { label: string; cls: string; icon: string }> = {
-  TOTAL:   { label: 'Total',   cls: 'vis--total',   icon: '⬤' },
-  PARCIAL: { label: 'Parcial', cls: 'vis--parcial', icon: '◐' },
-  NULA:    { label: 'Nula',    cls: 'vis--nula',    icon: '○' },
+  TOTAL:      { label: 'Total',      cls: 'vis--total',      icon: '⬤' },
+  PARCIAL:    { label: 'Parcial',    cls: 'vis--parcial',    icon: '◐' },
+  CONTROLADO: { label: 'Controlado', cls: 'vis--controlado', icon: '👤' },
+  NULA:       { label: 'Nula',       cls: 'vis--nula',       icon: '○' },
 }
 </script>
 
@@ -33,7 +34,8 @@ const config: Record<Visibility, { label: string; cls: string; icon: string }> =
 }
 .vis-badge--md { font-size: 0.7rem; padding: 3px 10px; }
 .vis-badge__dot { font-size: 0.55em; }
-.vis--total   { background: rgba(16, 185, 129, 0.12); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.25); }
-.vis--parcial { background: rgba(201, 168, 76, 0.12); color: var(--color-gold); border: 1px solid rgba(201, 168, 76, 0.25); }
-.vis--nula    { background: rgba(239, 68, 68, 0.12); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.25); }
+.vis--total      { background: rgba(16, 185, 129, 0.12); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.25); }
+.vis--parcial    { background: rgba(201, 168, 76, 0.12); color: var(--color-gold); border: 1px solid rgba(201, 168, 76, 0.25); }
+.vis--controlado { background: rgba(59, 130, 246, 0.12); color: #3B82F6; border: 1px solid rgba(59, 130, 246, 0.25); }
+.vis--nula       { background: rgba(239, 68, 68, 0.12); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.25); }
 </style>
