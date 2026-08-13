@@ -38,22 +38,20 @@ def upgrade() -> None:
         create_type=False
     )
 
-    # Garantir que os tipos enum existam no banco Postgres
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE quest_status AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ON_HOLD');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
+    # Garantir que os tipos enum existam no banco (compatível com Postgres e CockroachDB)
+    bind = op.get_bind()
 
-    op.execute("""
-        DO $$ BEGIN
-            CREATE TYPE quest_category AS ENUM ('MAIN_QUEST', 'SIDE_QUEST', 'MONSTER_HUNT', 'ARTIFACT_SEARCH', 'OUTPOST', 'FACTION');
-        EXCEPTION
-            WHEN duplicate_object THEN null;
-        END $$;
-    """)
+    has_quest_status = bind.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quest_status')"
+    )).scalar()
+    if not has_quest_status:
+        op.execute(sa.text("CREATE TYPE quest_status AS ENUM ('NOT_STARTED', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'ON_HOLD')"))
+
+    has_quest_category = bind.execute(sa.text(
+        "SELECT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'quest_category')"
+    )).scalar()
+    if not has_quest_category:
+        op.execute(sa.text("CREATE TYPE quest_category AS ENUM ('MAIN_QUEST', 'SIDE_QUEST', 'MONSTER_HUNT', 'ARTIFACT_SEARCH', 'OUTPOST', 'FACTION')"))
 
     # 2. Criar tabela quests
     op.create_table(
