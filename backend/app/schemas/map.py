@@ -86,7 +86,10 @@ class MapPinOut(BaseModel):
     target_map_id: uuid.UUID | None = None
     target_article: MapPinArticleSummary | None = None
     target_map_title: str | None = None
+    created_by: uuid.UUID | None = None
     is_locked: bool = False
+    can_edit: bool = False
+    can_delete: bool = False
 
 
 class MapListOut(BaseModel):

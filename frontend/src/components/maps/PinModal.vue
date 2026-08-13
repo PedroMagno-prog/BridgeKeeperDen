@@ -2,9 +2,10 @@
 /**
  * Modal para o Mestre criar ou editar um Marcador de Mapa (Pin).
  */
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useMapsStore, type MapPin, type MapLayer, type MapItem } from '@/stores/maps'
 import { useArticlesStore, type MentionSuggestion, type Visibility } from '@/stores/articles'
+import { useWorldsStore } from '@/stores/worlds'
 import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
 
 const props = defineProps<{
@@ -22,6 +23,8 @@ const emit = defineEmits<{
 
 const mapsStore = useMapsStore()
 const articlesStore = useArticlesStore()
+const worldsStore = useWorldsStore()
+const isMestre = computed(() => worldsStore.isMestre)
 
 const title = ref('')
 const icon = ref('city')
@@ -76,7 +79,7 @@ watch(
         title.value = ''
         icon.value = 'city'
         color.value = '#EAB308'
-        visibility.value = 'NULA'
+        visibility.value = isMestre.value ? 'NULA' : 'CONTROLADO'
         layerId.value = props.layers[0]?.id || null
         linkType.value = 'NONE'
         targetArticleId.value = null
@@ -160,7 +163,7 @@ async function handleSave() {
               </select>
             </div>
 
-            <div class="form-group flex-1">
+            <div v-if="isMestre" class="form-group flex-1">
               <label>Visibilidade (Névoa)</label>
               <select v-model="visibility" class="form-input">
                 <option value="NULA">Nula</option>
@@ -200,7 +203,7 @@ async function handleSave() {
             <select v-model="linkType" class="form-input">
               <option value="NONE">Nenhum (Apenas Marcador)</option>
               <option value="ARTICLE">Vincular a Artigo do Codex</option>
-              <option value="MAP">Vincular a Sub-Mapa</option>
+              <option v-if="isMestre" value="MAP">Vincular a Sub-Mapa</option>
             </select>
           </div>
 

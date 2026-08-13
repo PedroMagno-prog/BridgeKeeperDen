@@ -92,10 +92,10 @@ function openCodexArticle(articleId: string) {
       </div>
     </div>
 
-    <!-- Footer para Mestre -->
-    <div v-if="isMestre" class="popover-footer">
-      <button class="btn-sm btn-ghost" @click="emit('edit', pin)">✏️ Editar</button>
-      <button class="btn-sm btn-danger" @click="emit('delete', pin)">🗑️ Excluir</button>
+    <!-- Footer para Mestre ou Criador -->
+    <div v-if="isMestre || pin.can_edit" class="popover-footer">
+      <button v-if="isMestre || pin.can_edit" class="btn-sm btn-ghost" @click="emit('edit', pin)">✏️ Editar</button>
+      <button v-if="isMestre || pin.can_delete" class="btn-sm btn-danger" @click="emit('delete', pin)">🗑️ Excluir</button>
     </div>
   </div>
 </template>

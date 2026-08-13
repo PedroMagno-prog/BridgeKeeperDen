@@ -187,18 +187,24 @@ def _get_target_article_summary(pin: Any, role: UserRole) -> dict | None:
     }
 
 
-def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
+def sanitize_pin(pin: Any, role: UserRole, user_id: Any = None) -> dict | None:
     """
     Sanitiza um pin de mapa.
 
     - MESTRE: retorna tudo (com preview do artigo e titulo do sub-mapa).
+    - Criador (pin.created_by == user_id): visibilidade TOTAL para o criador (can_edit=True, can_delete=True).
     - JOGADOR + NULA: retorna None (pin invisivel).
     - JOGADOR + PARCIAL: titulo visivel, icone '?', sem target links.
-    - JOGADOR + TOTAL: retorna tudo (respeitando a visibilidade do artigo alvo).
+    - JOGADOR + CONTROLADO / TOTAL: retorna dados visíveis, sem permissão de edição.
     """
     target_map_title = pin.target_map.title if hasattr(pin, "target_map") and pin.target_map else None
+    created_by_id = getattr(pin, "created_by", None)
 
-    if role == UserRole.MESTRE:
+    is_creator = bool(user_id and created_by_id and str(created_by_id) == str(user_id))
+    can_edit = bool(role == UserRole.MESTRE or is_creator)
+    can_delete = bool(role == UserRole.MESTRE or is_creator)
+
+    if role == UserRole.MESTRE or is_creator:
         return {
             "id": pin.id,
             "title": pin.title,
@@ -212,7 +218,10 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
             "target_map_id": pin.target_map_id,
             "target_article": _get_target_article_summary(pin, role),
             "target_map_title": target_map_title,
+            "created_by": created_by_id,
             "is_locked": False,
+            "can_edit": can_edit,
+            "can_delete": can_delete,
         }
 
     if pin.visibility == VisibilityType.NULA:
@@ -232,10 +241,13 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
             "target_map_id": None,
             "target_article": None,
             "target_map_title": None,
+            "created_by": created_by_id,
             "is_locked": True,
+            "can_edit": False,
+            "can_delete": False,
         }
 
-    # TOTAL
+    # CONTROLADO ou TOTAL para outros jogadores
     return {
         "id": pin.id,
         "title": pin.title,
@@ -249,7 +261,10 @@ def sanitize_pin(pin: Any, role: UserRole) -> dict | None:
         "target_map_id": pin.target_map_id,
         "target_article": _get_target_article_summary(pin, role),
         "target_map_title": target_map_title,
+        "created_by": created_by_id,
         "is_locked": False,
+        "can_edit": False,
+        "can_delete": False,
     }
 
 

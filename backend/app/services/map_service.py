@@ -121,6 +121,7 @@ async def criar_pin(
     layer_id: uuid.UUID | None = None,
     target_article_id: uuid.UUID | None = None,
     target_map_id: uuid.UUID | None = None,
+    created_by: uuid.UUID | None = None,
 ) -> MapPin:
     """Cria um novo marcador no mapa."""
     pin = MapPin(
@@ -134,6 +135,7 @@ async def criar_pin(
         layer_id=layer_id,
         target_article_id=target_article_id,
         target_map_id=target_map_id,
+        created_by=created_by,
     )
     db.add(pin)
     await db.flush()
