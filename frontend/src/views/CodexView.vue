@@ -114,15 +114,12 @@ async function handleCreate() {
   creating.value = true
   try {
     const tags = newTags.value.split(',').map((t) => t.trim()).filter(Boolean)
-    const sections = newSections.value
-      .filter((s) => s.title.trim())
-      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
     await articlesStore.createArticle({
       title: newTitle.value.trim(),
       folder_id: createTargetFolderId.value || null,
       visibility: newVisibility.value,
       tags,
-      sections,
+      content: '',
       in_game_date: newInGameDate.value || null,
     } as any)
     showCreateModal.value = false
@@ -145,13 +142,6 @@ function openEditModal() {
   editTags.value = a.tags?.join(', ') ?? ''
   editInGameDate.value = a.in_game_date ?? ''
   editInGameSortOrder.value = a.in_game_sort_order ?? null
-  editSections.value = (a.sections ?? []).map((s) => ({
-    id: s.id,
-    title: s.title,
-    content: s.content,
-    image_url: s.image_url,
-  }))
-  if (editSections.value.length === 0) editSections.value.push({ title: '', content: '' })
   showEditModal.value = true
 }
 
