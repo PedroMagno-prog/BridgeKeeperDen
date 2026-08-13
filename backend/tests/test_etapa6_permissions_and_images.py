@@ -1,7 +1,5 @@
-"""Testes de integração para a Etapa 6: Permissões Granulares, CONTROLADO e Imagens de Seção."""
-import io
+"""Testes de integração para a Etapa 6: Permissões Granulares, CONTROLADO e Artigos."""
 import pytest
-from sqlalchemy import select
 from httpx import AsyncClient, ASGITransport
 from app.main import app
 from app.db.session import AsyncSessionLocal
@@ -49,18 +47,13 @@ async def test_etapa6_permissions_and_image_flow():
             mestre.id,
             UserRole.MESTRE,
             title="Grimório Proibido",
+            content="# Visão Geral\n\nSegredos antigos do reino.",
             visibility=VisibilityType.NULA,
             in_game_date="1200",
             in_game_sort_order=1,
             tags=[".magia"],
-            sections=[{"title": "Visão Geral", "content": "Segredos antigos do reino."}],
         )
         await db.commit()
-        
-        # Buscar ID da seção explicitamente
-        from app.db.models.article_section import ArticleSection
-        sec_res = await db.execute(select(ArticleSection).where(ArticleSection.article_id == article.id))
-        section_id = sec_res.scalars().first().id
 
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -88,10 +81,9 @@ async def test_etapa6_permissions_and_image_flow():
             res_a_read = await ac.get(f"/api/v1/worlds/{world.id}/articles/{article.id}", headers=headers_a)
             assert res_a_read.status_code == 200, f"Passo 5a falhou: {res_a_read.status_code} - {res_a_read.text}"
             detail_a = res_a_read.json()
-            print("DETAIL_A_JSON:", detail_a)
-            assert detail_a["title"] == "Grimório Proibido", f"Passo 5b falhou: {detail_a}"
-            assert detail_a["can_edit"] is False, f"Passo 5c falhou: {detail_a}"
-            assert detail_a["can_delete"] is False, f"Passo 5d falhou: {detail_a}"
+            assert detail_a["title"] == "Grimório Proibido"
+            assert detail_a["can_edit"] is False
+            assert detail_a["can_delete"] is False
 
             # Jogador B continua recebendo 404 (NULA)
             res_b_read = await ac.get(f"/api/v1/worlds/{world.id}/articles/{article.id}", headers=headers_b)
@@ -107,23 +99,6 @@ async def test_etapa6_permissions_and_image_flow():
 
             res_a_del = await ac.delete(f"/api/v1/worlds/{world.id}/articles/{article.id}", headers=headers_a)
             assert res_a_del.status_code == 403, f"Passo 6b falhou: {res_a_del.status_code} - {res_a_del.text}"
-
-            # 7. Teste de Upload de Imagem de Seção com otimização Pillow (>5MB)
-            from PIL import Image
-            img = Image.new("RGB", (2000, 2000), color=(100, 150, 200))
-            img_bytes_io = io.BytesIO()
-            img.save(img_bytes_io, format="BMP")  # BMP não comprimido para dar > 5MB
-            bmp_bytes = img_bytes_io.getvalue()
-
-            res_img = await ac.post(
-                f"/api/v1/worlds/{world.id}/articles/{article.id}/sections/{section_id}/image",
-                files={"file": ("mapa_secao.bmp", bmp_bytes, "image/bmp")},
-                headers=headers_mestre,
-            )
-            assert res_img.status_code == 200, f"Passo 7a falhou: {res_img.status_code} - {res_img.text}"
-            img_url = res_img.json()["image_url"]
-            assert img_url.startswith("/static/section_images/"), f"Passo 7b falhou: {img_url}"
-            assert "_optimized.webp" in img_url or img_url.endswith(".webp") or img_url.endswith(".bmp")
 
             # Cleanup
             await db.delete(world)

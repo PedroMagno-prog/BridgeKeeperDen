@@ -70,6 +70,7 @@ def sanitize_article_for_list(
     if eff_vis == VisibilityType.PARCIAL:
         return {
             "id": article.id,
+            "folder_id": article.folder_id,
             "title": article.title,
             "visibility": article.visibility,
             "in_game_date": None,
@@ -86,6 +87,7 @@ def sanitize_article_for_list(
     # CONTROLADO ou TOTAL
     return {
         "id": article.id,
+        "folder_id": article.folder_id,
         "title": article.title,
         "visibility": article.visibility,
         "in_game_date": article.in_game_date,
@@ -104,7 +106,7 @@ def sanitize_article_detail(
     article: Any, role: UserRole, user_id: Any = None, specific_perm: VisibilityType | None = None
 ) -> dict | None:
     """
-    Sanitiza um artigo para exibição de detalhe (com sections e image_url).
+    Sanitiza um artigo para exibição de detalhe (com content e inventory).
     """
     eff_vis, can_edit, can_delete = resolve_effective_visibility(
         article.visibility, article.created_by, user_id, role, specific_perm
@@ -116,7 +118,9 @@ def sanitize_article_detail(
     if eff_vis == VisibilityType.PARCIAL:
         return {
             "id": article.id,
+            "folder_id": article.folder_id,
             "title": article.title,
+            "content": "",
             "visibility": article.visibility,
             "in_game_date": None,
             "in_game_sort_order": None,
@@ -134,21 +138,14 @@ def sanitize_article_detail(
     # CONTROLADO ou TOTAL (ambos recebem o conteúdo completo!)
     return {
         "id": article.id,
+        "folder_id": article.folder_id,
         "title": article.title,
+        "content": article.content or "",
         "visibility": article.visibility,
         "in_game_date": article.in_game_date,
         "in_game_sort_order": article.in_game_sort_order,
         "tags": [t.name for t in article.tags],
-        "sections": [
-            {
-                "id": s.id,
-                "title": s.title,
-                "content": s.content,
-                "order_index": s.order_index,
-                "image_url": getattr(s, "image_url", None),
-            }
-            for s in article.sections
-        ],
+        "sections": [],
         "inventory_items": [
             {
                 "id": item.id,

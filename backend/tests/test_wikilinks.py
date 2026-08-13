@@ -7,7 +7,6 @@ from app.db.models.user import User
 from app.db.models.world import World
 from app.db.models.world_member import WorldMember
 from app.db.models.article import Article
-from app.db.models.article_section import ArticleSection
 from app.db.models.enums import UserRole, VisibilityType
 from app.core.security import criar_access_token
 
@@ -30,19 +29,15 @@ async def test_wikilinks_and_backlinks_flow():
 
         # 2. Criar dois artigos
         art_target = Article(world_id=world.id, title="Cidade de Thanatos", visibility=VisibilityType.TOTAL, created_by=user.id)
-        art_source = Article(world_id=world.id, title="Rei Eldrin", visibility=VisibilityType.TOTAL, created_by=user.id)
+        art_source = Article(
+            world_id=world.id,
+            title="Rei Eldrin",
+            content="# História\n\nEle é o governante lendário da [[Cidade de Thanatos]] desde tempos imemoriais.",
+            visibility=VisibilityType.TOTAL,
+            created_by=user.id,
+        )
         db.add(art_target)
         db.add(art_source)
-        await db.flush()
-
-        # Adicionar secao no art_source citando o art_target
-        sec = ArticleSection(
-            article_id=art_source.id,
-            title="História",
-            content="Ele é o governante lendário da [[Cidade de Thanatos]] desde tempos imemoriais.",
-            order_index=0
-        )
-        db.add(sec)
         await db.commit()
 
         token = criar_access_token({"sub": str(user.id)})
@@ -94,7 +89,6 @@ async def test_wikilinks_and_backlinks_flow():
             assert "Cidade de Thanatos" in backlinks[0]["snippet"]
 
             # Cleanup
-            await db.delete(sec)
             await db.delete(art_target)
             await db.delete(art_source)
             await db.delete(member)

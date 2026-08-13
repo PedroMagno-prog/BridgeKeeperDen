@@ -86,9 +86,8 @@ async def test_obsidian_import_flow():
             nota_main = next(a for a in articles if a.title == "NotaPrincipal")
             assert nota_main.visibility == VisibilityType.NULA  # Default Névoa Nula
             detail_main = await article_service.buscar_artigo(db, nota_main.id, world.id)
-            assert len(detail_main.sections) == 2
-            assert detail_main.sections[0].title == "Visão Geral"
-            assert detail_main.sections[1].title == "História Secreta"
+            assert "Visão Geral" in detail_main.content
+            assert "História Secreta" in detail_main.content
 
             nota_cataratas = next(a for a in articles if a.title == "Cataratas")
             assert nota_cataratas.visibility == VisibilityType.NULA

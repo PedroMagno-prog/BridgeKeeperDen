@@ -2,14 +2,12 @@
 from __future__ import annotations
 
 import io
-import re
 import uuid
 import zipfile
 import frontmatter
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models.article import Article
-from app.db.models.article_section import ArticleSection
 from app.db.models.article_tag import ArticleTag
 from app.db.models.enums import VisibilityType
 
@@ -30,7 +28,7 @@ async def processar_zip_obsidian(
 
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
         for file_info in z.infolist():
-            # Ignora pastas, arquivos oculstos do macOS/Obsidian e extensões que não sejam .md
+            # Ignora pastas, arquivos ocultos do macOS/Obsidian e extensões que não sejam .md
             filename = file_info.filename
             if (
                 file_info.is_dir()
@@ -86,30 +84,17 @@ async def processar_zip_obsidian(
                     if not folder.startswith("."):
                         tags_set.add(folder.strip())
 
-            # 3. Dividir conteúdo em Seções por Headers (#, ##)
-            sections_data = parse_markdown_sections(raw_text)
-
-            # 4. Criar Entidade do Artigo
+            # 3. Criar Entidade do Artigo com o conteúdo Markdown contínuo
             article = Article(
                 world_id=world_id,
                 title=article_title,
+                content=raw_text.strip(),
                 visibility=visibility,
                 in_game_date=in_game_date,
                 created_by=user_id,
             )
             db.add(article)
             await db.flush()
-
-            # Adicionar Seções
-            for sec in sections_data:
-                db.add(
-                    ArticleSection(
-                        article_id=article.id,
-                        title=sec["title"],
-                        content=sec["content"],
-                        order_index=sec["order_index"],
-                    )
-                )
 
             # Adicionar Tags
             for tag_name in tags_set:
@@ -130,36 +115,3 @@ async def processar_zip_obsidian(
         "imported_count": imported_count,
         "skipped_count": skipped_count,
     }
-
-
-def parse_markdown_sections(text: str) -> list[dict]:
-    """Divide o corpo do Markdown em seções baseadas em títulos # / ##."""
-    text_clean = text.strip()
-    if not text_clean:
-        return [{"title": "Visão Geral", "content": "", "order_index": 0}]
-
-    header_regex = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
-    matches = list(header_regex.finditer(text_clean))
-
-    if not matches:
-        return [{"title": "Visão Geral", "content": text_clean, "order_index": 0}]
-
-    sections: list[dict] = []
-    if matches[0].start() > 0:
-        pre_content = text_clean[: matches[0].start()].strip()
-        if pre_content:
-            sections.append({"title": "Visão Geral", "content": pre_content, "order_index": 0})
-
-    for idx, match in enumerate(matches):
-        sec_title = match.group(2).strip()
-        start_pos = match.end()
-        end_pos = matches[idx + 1].start() if idx + 1 < len(matches) else len(text_clean)
-        sec_content = text_clean[start_pos:end_pos].strip()
-
-        sections.append({
-            "title": sec_title if sec_title else "Seção Sem Título",
-            "content": sec_content,
-            "order_index": len(sections),
-        })
-
-    return sections

@@ -6,7 +6,7 @@ from app.db.models.user import User  # noqa: F401
 from app.db.models.world import World  # noqa: F401
 from app.db.models.world_member import WorldMember  # noqa: F401
 from app.db.models.article import Article  # noqa: F401
-from app.db.models.article_section import ArticleSection  # noqa: F401
+from app.db.models.article_folder import ArticleFolder  # noqa: F401
 from app.db.models.article_tag import ArticleTag  # noqa: F401
 from app.db.models.character_inventory import CharacterInventory  # noqa: F401
 from app.db.models.map import Map  # noqa: F401

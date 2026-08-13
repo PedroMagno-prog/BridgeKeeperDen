@@ -1,164 +1,85 @@
-# ETAPA 7: Edição Inline/Live-Preview de Artigos com Auto-Save (Debounce & Unmount) e Parsing de Wikilinks em Tempo Real
+# 📝 Prompt de Implementação - Etapa 7: Modelagem de Dados e Unificação do Artigo (Database & Models)
 
-> **Instrução para o Agente de IA da IDE:**
-> Você deve implementar estritamente os requisitos, alterações e refatorações descritos nesta etapa. Substitua a edição via modal estanque do Codex por uma experiência de edição inline e live-preview direta na página do artigo. Mantenha os padrões do projeto (FastAPI + SQLAlchemy Assíncrono no backend; Vue 3 + TypeScript + Pinia + Vue Router no frontend) e respeite a matriz de permissões desenvolvida na Etapa 6.
-
----
-
-## 1. Visão Geral e Objetivos da Etapa 7
-
-Esta etapa elimina a barreira entre "modo leitura" e "modo edição" na visualização de Artigos do Codex. Se o usuário tiver permissão de edição (Mestre, Criador ou jogador com permissão `TOTAL`), a página do artigo permitirá a edição direta e fluida de suas seções com salvamento automático reativo.
-
-### Funcionalidades Entregues nesta Etapa:
-
-1. **Edição Inline & Live Preview Unificados:** A leitura e a edição de títulos e seções ocorrem na mesma tela, com suporte a preview em tempo real de mídias e Wikilinks (`[[Artigo]]`).
-2. **Auto-Save com Debounce de 3 Segundos:** Alterações em títulos, seções e tags são acumuladas e enviadas ao backend automaticamente após 3 segundos de inatividade de digitação.
-3. **Salvamento Garantido na Navegação (*Route Leave / Unmount*):** Se o usuário clicar em um link interno, mudar de aba no menu lateral ou navegar para outra rota, qualquer alteração pendente é salva imediatamente antes da transição.
-4. **Indicador de Status de Sincronização:** Feedback visual discreto no cabeçalho do artigo exibindo o estado do documento (*"Salvo"*, *"Salvando..."*, *"Alterações não salvas"*, *"Erro ao salvar"*).
-5. **Reconhecimento de Wikilinks em Tempo Real:** O autocomplete e a resolução de links internos `[[...]]` funcionam de maneira contínua durante a digitação no próprio bloco da seção.
+## 🎯 Objetivo
+Refatorar a camada de banco de dados do projeto **BridgeKeeperDen** para:
+1. Suportar a criação e organização hierárquica de pastas de artigos (`ArticleFolder`).
+2. Unificar a estrutura de texto dos artigos (`Article`) em um único arquivo de conteúdo Markdown contínuo (`content`), eliminando completamente o conceito de seções fragmentadas (`ArticleSection`).
 
 ---
 
-## 2. Detalhamento das Alterações - Backend (FastAPI / SQLAlchemy)
-
-### 2.1. Otimização dos Endpoints de Artigo (`backend/app/api/routes/articles.py`)
-
-Ajustar os endpoints de atualização para permitir requisições parciais de salvamento automático sem reescrever a estrutura inteira de forma destrutiva quando apenas uma seção for alterada.
-
-* **`PUT /api/v1/worlds/{world_id}/articles/{article_id}`**:
-* Garantir tratamento idempotente e performático ao receber o payload do auto-save.
-* Atualizar a coluna `updated_at` a cada salvamento bem-sucedido.
-
-
-* **`PATCH /api/v1/worlds/{world_id}/articles/{article_id}/sections/{section_id}` (Opcional/Otimização)**:
-* Endpoint dedicado para atualização cirúrgica de uma única seção (título, conteúdo ou `image_url`) caso o payload completo do artigo seja desnecessário.
-
-
+## 🗂️ Arquivos Envolvidos
+- `backend/app/db/models/article_folder.py` *(Novo)*
+- `backend/app/db/models/article.py` *(Modificado)*
+- `backend/app/db/models/article_section.py` *(Removido)*
+- `backend/app/db/models/__init__.py` *(Modificado)*
+- `backend/app/db/migrations/versions/xxxx_etapa7_folders_and_article_content.py` *(Novo - Migration)*
 
 ---
 
-## 3. Detalhamento das Alterações - Frontend (Vue 3 / TypeScript / Pinia)
+## 📋 Tarefas Detalhadas por Arquivo
 
-### 3.1. Composable de Auto-Save (`frontend/src/composables/useAutoSave.ts`)
+### 1. Criar o modelo de pastas (`backend/app/db/models/article_folder.py`)
+Crie a classe `ArticleFolder` herdando de `Base` (SQLAlchemy).
+* **Campos da Tabela `article_folders`**:
+  * `id`: `Integer`, Primary Key, autoincrement.
+  * `world_id`: `Integer`, ForeignKey para `worlds.id` (ondelete="CASCADE"), `nullable=False`, `index=True`.
+  * `parent_id`: `Integer`, ForeignKey para `article_folders.id` (ondelete="CASCADE"), `nullable=True`, `index=True`.
+  * `name`: `String(255)`, `nullable=False`.
+  * `created_at`: `DateTime(timezone=True)`, `server_default=func.now()`.
+  * `updated_at`: `DateTime(timezone=True)`, `onupdate=func.now()`.
+* **Relacionamentos**:
+  * `world`: relacionamento com `World`.
+  * `parent`: relacionamento self-referencial com `ArticleFolder` (`remote_side=[id]`, `back_populates="children"`).
+  * `children`: relacionamento self-referencial com `ArticleFolder` (`back_populates="parent"`, `cascade="all, delete-orphan"`).
+  * `articles`: relacionamento com `Article` (`back_populates="folder"`).
 
-Criar um composable para encapsular a lógica de debounce e salvamento pendente:
+### 2. Modificar o modelo de artigo (`backend/app/db/models/article.py`)
+Atualize o modelo `Article`:
+* **Novas Colunas**:
+  * `folder_id`: `Integer`, ForeignKey para `article_folders.id` (ondelete="SET NULL"), `nullable=True`, `index=True`.
+  * `content`: `Text`, `nullable=False`, `default=""`.
+* **Novos Relacionamentos**:
+  * `folder`: relacionamento com `ArticleFolder` (`back_populates="articles"`).
+* **Remoção de Relacionamento**:
+  * Remover o relacionamento `sections` que apontava para `ArticleSection`.
 
-```typescript
-import { ref, watch, onUnmounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+### 3. Remover o modelo de seções (`backend/app/db/models/article_section.py`)
+* Delete ou descontinue o arquivo `article_section.py`.
 
-export function useAutoSave<T>(
-  source: () => T,
-  saveFn: (data: T) => Promise<void>,
-  delayMs = 3000
-) {
-  const status = ref<'SAVED' | 'SAVING' | 'PENDING' | 'ERROR'>('SAVED')
-  let timer: number | null = null
-  let pendingData: T | null = null
+### 4. Atualizar exportações (`backend/app/db/models/__init__.py`)
+* Importe `ArticleFolder`.
+* Remova a importação e exportação de `ArticleSection`.
 
-  const triggerSave = async () => {
-    if (!pendingData) return
-    status.value = 'SAVING'
-    try {
-      await saveFn(pendingData)
-      pendingData = null
-      status.value = 'SAVED'
-    } catch (err) {
-      status.value = 'ERROR'
-      console.error('Erro no Auto-Save:', err)
-    }
-  }
+### 5. Migration do Alembic (`backend/app/db/migrations/versions/`)
+Gere ou crie uma nova migration do Alembic para aplicar as mudanças:
 
-  // Monitora alterações nos dados
-  watch(
-    source,
-    (newData) => {
-      pendingData = JSON.parse(JSON.stringify(newData))
-      status.value = 'PENDING'
-      if (timer) clearTimeout(timer)
-      timer = window.setTimeout(triggerSave, delayMs)
-    },
-    { deep: true }
-  )
+* **Função `upgrade()`**:
+  1. Criar a tabela `article_folders`.
+  2. Adicionar as colunas `folder_id` e `content` na tabela `articles`.
+  3. **Migração de Dados das Seções para `content`**:
+     * Consultar todas as seções existentes na tabela `article_sections` agrupadas por `article_id` e ordenadas por ordem de criação/posicionamento.
+     * Para cada artigo, concatenar suas seções no seguinte formato Markdown:
+       ```markdown
+       # [Título da Seção]
+       
+       [Conteúdo da Seção]
+       ```
+     * Caso o título da seção seja nulo ou vazio, incluir apenas o conteúdo da seção.
+     * Executar o `UPDATE articles SET content = :concatenated_content WHERE id = :article_id`.
+  4. Remover a FK e a tabela `article_sections`.
 
-  // Salva imediatamente se o usuário tentar mudar de rota
-  onBeforeRouteLeave(async () => {
-    if (timer) clearTimeout(timer)
-    if (pendingData) {
-      await triggerSave()
-    }
-  })
-
-  // Salva se o componente for desmontado
-  onUnmounted(async () => {
-    if (timer) clearTimeout(timer)
-    if (pendingData) {
-      await triggerSave()
-    }
-  })
-
-  return { status, triggerSave }
-}
-
-```
-
-### 3.2. Refatoração da View do Codex (`frontend/src/views/CodexView.vue`)
-
-Reformular a área de detalhe do artigo de modo que a visualização seja interativa:
-
-1. **Cabeçalho do Artigo**:
-* O título torna-se um campo editável em linha (`<input>` transparente ou `contenteditable`) para usuários com permissão de escrita (`can_edit === true`).
-* Badge indicador do status de sincronização no topo da tela:
-* 🟢 *"Salvo"*
-* 🟡 *"Salvando..."*
-* 🟠 *"Alterações pendentes"*
-* 🔴 *"Erro ao salvar"*
-
-
-
-
-2. **Blocos de Seções com Foco e Preview**:
-* Cada seção do artigo exibe o texto processado via `<WikilinkText>` por padrão.
-* Ao clicar sobre o bloco de texto de uma seção (ou ao focar), o elemento alterna suavemente para o `<WikilinkInput>`, permitindo a edição e o acionamento do autocomplete de `[[`.
-* Ao desfoque (*blur*) ou inatividade de 3 segundos, o estado é enviado para o auto-save e o bloco volta a exibir a renderização do `<WikilinkText>`.
-
-
-3. **Adição/Remoção de Seções e Tags em Linha**:
-* Botões discretos `+ Adicionar Seção` no rodapé da página.
-* Gerenciamento de tags inline (adicionar/remover etiquetas estilo `.NPC`, `.Local`).
-
-
+* **Função `downgrade()`**:
+  1. Recriar a tabela `article_sections`.
+  2. Remover as colunas `folder_id` e `content` da tabela `articles`.
+  3. Remover a tabela `article_folders`.
 
 ---
 
-## 4. Plano de Ação Passo a Passo para a IDE (Execution Checklist)
-
-Siga rigorosamente a ordem de execução abaixo:
-
-1. **[Frontend]** Criar o composable `frontend/src/composables/useAutoSave.ts`.
-2. **[Backend]** Garantir que a rota `PUT /api/v1/worlds/{world_id}/articles/{article_id}` em `backend/app/api/routes/articles.py` processe atualizações parciais com velocidade e sem erros de concorrência.
-3. **[Frontend]** Atualizar a store `frontend/src/stores/articles.ts` para suportar atualizações de seções e expor ações de auto-save.
-4. **[Frontend]** Refatorar `frontend/src/views/CodexView.vue`:
-* Remover os modais de edição de artigo antigos.
-* Implementar o título editável inline e os blocos de seção com alternância automática entre foco (`WikilinkInput`) e leitura (`WikilinkText`).
-* Conectar a reatividade das seções ao `useAutoSave` configurado com o tempo de 3000ms.
-
-
-5. **[Frontend]** Adicionar o componente visual de status de salvamento no cabeçalho do artigo.
-6. **[Frontend]** Adicionar os interceptores de mudança de rota (`onBeforeRouteLeave`) e encerramento do componente (`onUnmounted`) para acionar a persistência imediata dos dados pendentes.
+## 🧪 Requisitos de Teste e Validação
+1. Executar `alembic upgrade head` no ambiente de desenvolvimento/testes e verificar se todas as migrações ocorrem sem erros.
+2. Confirmar se a tabela `article_folders` foi criada corretamente com suporte a subpastas (`parent_id`).
+3. Verificar se o campo `content` de `articles` foi preenchido com a concatenação em formato Markdown das antigas seções.
+4. Executar os testes existentes do Pytest (`pytest backend/tests/`) para garantir que nenhuma regressão de sintaxe ocorra nos modelos importados.
 
 ---
-
-## 5. Critérios de Aceite e Testes de Verificação
-
-### Testes de Backend:
-
-* [ ] Alterações enviadas pelo auto-save atualizam os registros na tabela `articles` e `article_sections` e modificam o campo `updated_at`.
-* [ ] Requisições concorrentes de salvamento automático não geram inconsistências no banco de dados.
-
-### Testes de Frontend:
-
-* [ ] Abrir um artigo com permissão de escrita permite digitar diretamente no título e nas seções sem abrir modais.
-* [ ] Após digitar qualquer texto e aguardar 3 segundos sem apertar teclas, o status muda para *"Salvando..."* e depois para *"Salvo"*.
-* [ ] Digitar um Wikilink no formato `[[Nome do Artigo]]` ativa o popup de autocomplete em tempo real.
-* [ ] Se o usuário digitar um texto e clicar imediatamente em um link de outro artigo ou em um item da sidebar, o sistema força o salvamento dos dados pendentes antes de concluir a navegação.
+Instruções finais para a IA: Siga estritamente as convenções de código do projeto (FastAPI, SQLAlchemy v2, Alembic). Gere o código limpo, tipado e devidamente comentado.
