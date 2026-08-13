@@ -505,7 +505,8 @@ async def importar_cofre_obsidian(
     return ObsidianImportResultOut(
         imported_count=res["imported_count"],
         skipped_count=res["skipped_count"],
-        message=f"{res['imported_count']} notas importadas com sucesso com Obscurecimento Total (Visão Nula).",
+        folders_created=res.get("folders_created", 0),
+        message=res.get("message", f"{res['imported_count']} notas importadas com sucesso com Obscurecimento Total (Visão Nula)."),
     )
 
 

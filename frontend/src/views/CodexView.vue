@@ -11,6 +11,8 @@ import WikilinkText from '@/components/ui/WikilinkText.vue'
 import WikilinkInput from '@/components/ui/WikilinkInput.vue'
 import ObsidianImportModal from '@/components/codex/ObsidianImportModal.vue'
 import PermissionsModal from '@/components/ui/PermissionsModal.vue'
+import FolderTree from '@/components/codex/FolderTree.vue'
+import FolderModal from '@/components/codex/FolderModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -25,6 +27,15 @@ const showObsidianModal = ref(false)
 const showPermModal = ref(false)
 const showDetail = ref(false)
 const showTagFilters = ref(true)
+
+// Gestão de Pastas (Etapa 10)
+const activeViewTab = ref<'tree' | 'flat'>('tree')
+const showFolderModal = ref(false)
+const folderModalMode = ref<'create' | 'rename'>('create')
+const folderModalId = ref<number | null>(null)
+const folderModalParentId = ref<number | null>(null)
+const folderModalInitialName = ref('')
+const createTargetFolderId = ref<number | null>(null)
 
 const isMestre = computed(() => worldsStore.isMestre)
 const canEdit = computed(() => isMestre.value || articlesStore.current?.can_edit !== false)
@@ -75,6 +86,19 @@ function toggleTag(tag: string) {
   search()
 }
 
+function handleOpenFolderModal(payload: { mode: 'create' | 'rename'; folderId?: number | null; parentId?: number | null; initialName?: string }) {
+  folderModalMode.value = payload.mode
+  folderModalId.value = payload.folderId || null
+  folderModalParentId.value = payload.parentId || null
+  folderModalInitialName.value = payload.initialName || ''
+  showFolderModal.value = true
+}
+
+function handleCreateArticleInFolder(folderId?: number | null) {
+  createTargetFolderId.value = folderId || null
+  showCreateModal.value = true
+}
+
 async function openArticle(id: string) {
   const a = await articlesStore.fetchArticle(id)
   if (a) showDetail.value = true
@@ -96,6 +120,7 @@ async function handleCreate() {
       .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
     await articlesStore.createArticle({
       title: newTitle.value.trim(),
+      folder_id: createTargetFolderId.value || null,
       visibility: newVisibility.value,
       tags,
       sections,
@@ -109,6 +134,7 @@ async function handleCreate() {
 function resetCreateForm() {
   newTitle.value = ''; newVisibility.value = 'NULA'; newTags.value = ''
   newInGameDate.value = ''; newSections.value = [{ title: '', content: '' }]
+  createTargetFolderId.value = null
 }
 
 function addCreateSection() { newSections.value.push({ title: '', content: '' }) }
@@ -196,58 +222,89 @@ function formatDate(iso: string) {
 
 <template>
   <div class="codex" :class="{ 'codex--detail-open': showDetail }">
-    <!-- ═══ LISTA DE ARTIGOS ═══ -->
+    <!-- ═══ LISTA / ÁRVORE DE ARTIGOS ═══ -->
     <div class="codex__list">
-      <div class="codex__toolbar">
-        <h2 class="codex__title">Codex</h2>
-        <div v-if="isMestre" class="toolbar-btns">
-          <button class="btn-ghost-sm" title="Importar Cofre Obsidian (.zip)" @click="showObsidianModal = true">
-            📥 Importar Obsidian
+      <div class="codex__toolbar flex items-center justify-between gap-2 p-3 border-b border-stone-800">
+        <div class="flex items-center gap-2">
+          <h2 class="codex__title text-base font-bold text-stone-200">Codex</h2>
+          <div class="flex items-center bg-stone-950 border border-stone-800 rounded-lg p-0.5 text-xs">
+            <button
+              class="px-2 py-0.5 rounded transition-colors"
+              :class="activeViewTab === 'tree' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-stone-400 hover:text-stone-200'"
+              @click="activeViewTab = 'tree'"
+            >
+              📁 Árvore
+            </button>
+            <button
+              class="px-2 py-0.5 rounded transition-colors"
+              :class="activeViewTab === 'flat' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-stone-400 hover:text-stone-200'"
+              @click="activeViewTab = 'flat'"
+            >
+              📋 Lista
+            </button>
+          </div>
+        </div>
+
+        <div v-if="isMestre" class="toolbar-btns flex items-center gap-1.5">
+          <button class="btn-ghost-sm text-xs" title="Importar Cofre Obsidian (.zip)" @click="showObsidianModal = true">
+            📥 Importar
           </button>
-          <button class="btn-gold-sm" @click="showCreateModal = true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            Novo
+          <button class="btn-gold-sm text-xs" @click="handleCreateArticleInFolder(null)">
+            + Novo
           </button>
         </div>
       </div>
 
-      <div class="search-bar">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input v-model="searchInput" type="text" placeholder="Buscar artigos..." class="search-bar__input" @keydown.enter="search" />
-        <button
-          v-if="allTags.length"
-          class="btn-tag-toggle"
-          :title="showTagFilters ? 'Ocultar Filtros de Tags' : 'Exibir Filtros de Tags'"
-          @click="showTagFilters = !showTagFilters"
-        >
-          🏷️ {{ showTagFilters ? '▴' : '▾' }}
-        </button>
+      <!-- MODO ÁRVORE DE PASTAS (Etapa 10) -->
+      <div v-if="activeViewTab === 'tree'" class="flex-1 overflow-hidden">
+        <FolderTree
+          :active-article-id="articlesStore.current?.id"
+          @select-article="openArticle"
+          @create-article="handleCreateArticleInFolder"
+          @open-folder-modal="handleOpenFolderModal"
+        />
       </div>
 
-      <div v-if="showTagFilters && allTags.length" class="tag-pills">
-        <button v-for="tag in allTags" :key="tag" class="tag-pill" :class="{ 'tag-pill--active': activeTag === tag }" @click="toggleTag(tag)">{{ tag }}</button>
-      </div>
+      <!-- MODO LISTA SIMPLES / BUSCA FLAT -->
+      <div v-else class="flex-1 flex flex-col overflow-hidden">
+        <div class="search-bar">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input v-model="searchInput" type="text" placeholder="Buscar artigos..." class="search-bar__input" @keydown.enter="search" />
+          <button
+            v-if="allTags.length"
+            class="btn-tag-toggle"
+            :title="showTagFilters ? 'Ocultar Filtros de Tags' : 'Exibir Filtros de Tags'"
+            @click="showTagFilters = !showTagFilters"
+          >
+            🏷️ {{ showTagFilters ? '▴' : '▾' }}
+          </button>
+        </div>
 
-      <div class="article-list">
-        <div v-if="articlesStore.loading" class="list-empty">Carregando...</div>
-        <div v-else-if="articlesStore.articles.length === 0" class="list-empty">Nenhum artigo encontrado.</div>
-        <button
-          v-else v-for="article in articlesStore.articles" :key="article.id"
-          class="article-row" :class="{ 'article-row--locked': article.is_locked, 'article-row--active': articlesStore.current?.id === article.id }"
-          @click="selectArticle(article)"
-        >
-          <div class="article-row__main">
-            <span class="article-row__title">
-              {{ article.title }}
-              <span v-if="article.is_locked" class="lock-icon">?</span>
-            </span>
-            <span v-if="article.in_game_date" class="article-row__date">{{ article.in_game_date }}</span>
-          </div>
-          <div class="article-row__meta">
-            <span v-for="tag in article.tags" :key="tag" class="tag-inline">{{ tag }}</span>
-            <VisibilityBadge v-if="isMestre" :visibility="article.visibility" />
-          </div>
-        </button>
+        <div v-if="showTagFilters && allTags.length" class="tag-pills">
+          <button v-for="tag in allTags" :key="tag" class="tag-pill" :class="{ 'tag-pill--active': activeTag === tag }" @click="toggleTag(tag)">{{ tag }}</button>
+        </div>
+
+        <div class="article-list">
+          <div v-if="articlesStore.loading" class="list-empty">Carregando...</div>
+          <div v-else-if="articlesStore.articles.length === 0" class="list-empty">Nenhum artigo encontrado.</div>
+          <button
+            v-else v-for="article in articlesStore.articles" :key="article.id"
+            class="article-row" :class="{ 'article-row--locked': article.is_locked, 'article-row--active': articlesStore.current?.id === article.id }"
+            @click="selectArticle(article)"
+          >
+            <div class="article-row__main">
+              <span class="article-row__title">
+                {{ article.title }}
+                <span v-if="article.is_locked" class="lock-icon">?</span>
+              </span>
+              <span v-if="article.in_game_date" class="article-row__date">{{ article.in_game_date }}</span>
+            </div>
+            <div class="article-row__meta">
+              <span v-for="tag in article.tags" :key="tag" class="tag-inline">{{ tag }}</span>
+              <VisibilityBadge v-if="isMestre" :visibility="article.visibility" />
+            </div>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -422,6 +479,17 @@ function formatDate(iso: string) {
       v-if="showPermModal && articlesStore.current"
       :article-id="articlesStore.current.id"
       @close="showPermModal = false"
+    />
+
+    <!-- Modal Gestão de Pastas (Etapa 10) -->
+    <FolderModal
+      :show="showFolderModal"
+      :mode="folderModalMode"
+      :folder-id="folderModalId"
+      :parent-id="folderModalParentId"
+      :initial-name="folderModalInitialName"
+      @close="showFolderModal = false"
+      @saved="showFolderModal = false"
     />
   </div>
 </template>

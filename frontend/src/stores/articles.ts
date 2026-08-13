@@ -5,6 +5,15 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { api } from '@/api/client'
 import { useWorldsStore } from './worlds'
+import {
+  getFolderTree,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  type FolderTreeNode,
+  type ArticleSummary,
+  type WorldFolderTreeResponse,
+} from '@/api/folders'
 
 export type Visibility = 'TOTAL' | 'PARCIAL' | 'CONTROLADO' | 'NULA'
 
@@ -25,7 +34,9 @@ export interface InventoryItem {
 
 export interface Article {
   id: string
+  folder_id?: number | null
   title: string
+  content?: string
   visibility: Visibility
   in_game_date: string | null
   in_game_sort_order: number | null
@@ -79,8 +90,89 @@ export const useArticlesStore = defineStore('articles', () => {
   const searchQuery = ref('')
   const tagFilter = ref('')
 
+  // Estado da Árvore de Pastas (Etapa 10)
+  const folderTree = ref<FolderTreeNode[]>([])
+  const rootArticles = ref<ArticleSummary[]>([])
+  const expandedFolderIds = ref<Set<number>>(new Set())
+  const selectedArticleId = ref<string | null>(null)
+
   function wid() {
     return useWorldsStore().activeWorld?.id
+  }
+
+  async function fetchFolderTree() {
+    const worldId = wid()
+    if (!worldId) return
+    loading.value = true
+    try {
+      const res: WorldFolderTreeResponse = await getFolderTree(worldId)
+      folderTree.value = res.folders
+      rootArticles.value = res.root_articles
+    } finally {
+      loading.value = false
+    }
+  }
+
+  function toggleFolderExpand(folderId: number) {
+    if (expandedFolderIds.value.has(folderId)) {
+      expandedFolderIds.value.delete(folderId)
+    } else {
+      expandedFolderIds.value.add(folderId)
+    }
+    // Para reatividade no Vue (Set ref mutation)
+    expandedFolderIds.value = new Set(expandedFolderIds.value)
+  }
+
+  function expandFolder(folderId: number) {
+    if (!expandedFolderIds.value.has(folderId)) {
+      expandedFolderIds.value.add(folderId)
+      expandedFolderIds.value = new Set(expandedFolderIds.value)
+    }
+  }
+
+  async function createNewFolder(name: string, parentId?: number | null) {
+    const worldId = wid()
+    if (!worldId) return
+    const folder = await createFolder(worldId, { name, parent_id: parentId })
+    if (parentId) {
+      expandFolder(parentId)
+    }
+    await fetchFolderTree()
+    return folder
+  }
+
+  async function renameFolder(folderId: number, newName: string) {
+    const worldId = wid()
+    if (!worldId) return
+    await updateFolder(worldId, folderId, { name: newName })
+    await fetchFolderTree()
+  }
+
+  async function removeFolder(folderId: number) {
+    const worldId = wid()
+    if (!worldId) return
+    await deleteFolder(worldId, folderId)
+    expandedFolderIds.value.delete(folderId)
+    expandedFolderIds.value = new Set(expandedFolderIds.value)
+    await fetchFolderTree()
+    await fetchArticles()
+  }
+
+  async function moveArticleToFolder(articleId: string, targetFolderId: number | null) {
+    await updateArticle(articleId, { folder_id: targetFolderId })
+    await fetchFolderTree()
+  }
+
+  async function patchArticleContent(articleId: string, content: string) {
+    const worldId = wid()
+    if (!worldId) return
+    const { data } = await api.patch<Article>(`/worlds/${worldId}/articles/${articleId}/content`, {
+      content,
+    })
+    if (current.value?.id === articleId) {
+      current.value = data
+    }
+    return data
   }
 
   async function fetchArticles() {
@@ -101,6 +193,7 @@ export const useArticlesStore = defineStore('articles', () => {
   async function fetchArticle(id: string) {
     const worldId = wid()
     if (!worldId) return
+    selectedArticleId.value = id
     const { data } = await api.get<Article>(`/worlds/${worldId}/articles/${id}`)
     current.value = data
     fetchBacklinks(id)
@@ -138,6 +231,7 @@ export const useArticlesStore = defineStore('articles', () => {
     if (!worldId) return
     const { data } = await api.post<Article>(`/worlds/${worldId}/articles/`, payload)
     articles.value.unshift(data)
+    await fetchFolderTree()
     return data
   }
 
@@ -157,6 +251,7 @@ export const useArticlesStore = defineStore('articles', () => {
     await api.delete(`/worlds/${worldId}/articles/${id}`)
     articles.value = articles.value.filter((a) => a.id !== id)
     if (current.value?.id === id) current.value = null
+    await fetchFolderTree()
   }
 
   async function updateInventory(articleId: string, items: Omit<InventoryItem, 'id'>[]) {
@@ -177,12 +272,13 @@ export const useArticlesStore = defineStore('articles', () => {
     formData.append('file', file)
     formData.append('use_folders_as_tags', String(useFoldersAsTags))
 
-    const { data } = await api.post<{ imported_count: number; skipped_count: number; message: string }>(
+    const { data } = await api.post<{ imported_count: number; skipped_count: number; folders_created: number; message: string }>(
       `/worlds/${worldId}/articles/import/obsidian`,
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } }
     )
 
+    await fetchFolderTree()
     await fetchArticles()
     return data
   }
@@ -215,6 +311,9 @@ export const useArticlesStore = defineStore('articles', () => {
 
   return {
     articles, current, currentBacklinks, loading, searchQuery, tagFilter,
+    folderTree, rootArticles, expandedFolderIds, selectedArticleId,
+    fetchFolderTree, toggleFolderExpand, expandFolder, createNewFolder, renameFolder, removeFolder,
+    moveArticleToFolder, patchArticleContent,
     fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory, importObsidianVault,
     fetchPermissions, updatePermissions, uploadSectionImage,
   }

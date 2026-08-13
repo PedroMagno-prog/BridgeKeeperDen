@@ -173,4 +173,5 @@ class ObsidianImportResultOut(BaseModel):
     """Resultado da importação em lote de cofre Obsidian (.zip)."""
     imported_count: int
     skipped_count: int
+    folders_created: int = 0
     message: str
