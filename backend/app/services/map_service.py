@@ -84,7 +84,6 @@ async def buscar_mapa(
         select(Map)
         .options(
             selectinload(Map.layers),
-            selectinload(Map.pins).selectinload(MapPin.target_article).selectinload(Article.sections),
             selectinload(Map.pins).selectinload(MapPin.target_article).selectinload(Article.tags),
             selectinload(Map.pins).selectinload(MapPin.target_map),
         )

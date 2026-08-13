@@ -11,6 +11,7 @@ from app.api.deps.database import get_db
 from app.api.deps.world_access import WorldContext, get_world_ctx
 from app.db.models.enums import UserRole
 from app.schemas.article import (
+    ArticleContentUpdate,
     ArticleCreate,
     ArticleDetailOut,
     ArticleFolderCreate,
@@ -309,6 +310,58 @@ async def atualizar_artigo(
         in_game_sort_order=body.in_game_sort_order if "in_game_sort_order" in fields_set else ...,
         tags=body.tags,
         sections=sections_data,
+    )
+    await db.commit()
+
+    loaded = await article_service.buscar_artigo(
+        db, article_id, ctx.world_id, populate_existing=True
+    )
+    return sanitize_article_detail(loaded, ctx.role, ctx.user.id, spec_perm)
+
+
+# ── PATCH /worlds/{world_id}/articles/{article_id}/content ───────────────────
+
+@router.patch(
+    "/{article_id}/content",
+    response_model=ArticleDetailOut,
+    summary="Atualiza unicamente o conteúdo Markdown do artigo (autosave acelerado)",
+)
+async def atualizar_conteudo_artigo(
+    article_id: uuid.UUID,
+    body: ArticleContentUpdate,
+    db: AsyncSession = Depends(get_db),
+    ctx: WorldContext = Depends(get_world_ctx),
+):
+    """
+    Atualização parcial otimizada para o autosave do editor de texto.
+    Verifica se o usuário tem permissão de edição (não CONTROLADO/Somente Leitura).
+    """
+    article = await article_service.buscar_artigo(db, article_id, ctx.world_id)
+    if not article:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado.")
+
+    from app.db.models.article_user_permission import ArticleUserPermission
+    from app.services.fog_of_war import resolve_effective_visibility
+
+    perm_res = await db.execute(
+        select(ArticleUserPermission.visibility).where(
+            ArticleUserPermission.article_id == article_id,
+            ArticleUserPermission.user_id == ctx.user.id,
+        )
+    )
+    spec_perm = perm_res.scalar_one_or_none()
+    eff_vis, can_edit, can_delete = resolve_effective_visibility(
+        article.visibility, article.created_by, ctx.user.id, ctx.role, spec_perm
+    )
+
+    if not can_edit:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Sua permissão neste recurso é de Somente Leitura (CONTROLADO)."
+        )
+
+    await article_service.atualizar_conteudo_artigo(
+        db, article_id, ctx.world_id, body.content
     )
     await db.commit()
 

@@ -262,6 +262,30 @@ async def atualizar_artigo(
     return article
 
 
+async def atualizar_conteudo_artigo(
+    db: AsyncSession,
+    article_id: uuid.UUID,
+    world_id: uuid.UUID,
+    content: str,
+) -> Article:
+    """
+    Atualiza unicamente o campo `content` do artigo (autosave acelerado de baixa latência).
+    """
+    from fastapi import HTTPException, status
+
+    stmt = select(Article).where(Article.id == article_id, Article.world_id == world_id)
+    res = await db.execute(stmt)
+    article = res.scalar_one_or_none()
+    if not article:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Artigo não encontrado."
+        )
+
+    article.content = content
+    await db.flush()
+    return article
+
+
 async def deletar_artigo(
     db: AsyncSession,
     article: Article,

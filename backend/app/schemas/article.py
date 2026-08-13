@@ -67,6 +67,11 @@ class ArticleUpdate(BaseModel):
     sections: list[SectionInput] | None = None
 
 
+class ArticleContentUpdate(BaseModel):
+    """Payload para atualização parcial do conteúdo Markdown (autosave acelerado)."""
+    content: str = Field(..., max_length=500_000)
+
+
 class InventoryItemInput(BaseModel):
     """Input para um item de inventário."""
     item_name: str = Field(..., min_length=1, max_length=100)
