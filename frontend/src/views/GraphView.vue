@@ -6,6 +6,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useQuestsStore, type GraphNode, type GraphEdge } from '@/stores/quests'
 import { useWorldsStore } from '@/stores/worlds'
+import { useArticlesStore } from '@/stores/articles'
 import VisibilityBadge from '@/components/ui/VisibilityBadge.vue'
 import WikilinkText from '@/components/ui/WikilinkText.vue'
 
@@ -16,10 +17,12 @@ interface SimNode extends GraphNode {
   vy: number
   radius: number
   connectionsCount: number
+  folder_id?: number | null
 }
 
 const questsStore = useQuestsStore()
 const worldsStore = useWorldsStore()
+const articlesStore = useArticlesStore()
 const router = useRouter()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
@@ -30,6 +33,22 @@ const hoveredNode = ref<SimNode | null>(null)
 const filterArticles = ref(true)
 const filterQuests = ref(true)
 const filterMaps = ref(true)
+const selectedFolderFilter = ref<number | 'ALL'>('ALL')
+
+import type { FolderTreeNode } from '@/api/folders'
+
+function flattenFolderTree(nodes: FolderTreeNode[], depth = 0): Array<{ id: number; name: string; depth: number }> {
+  const result: Array<{ id: number; name: string; depth: number }> = []
+  for (const node of nodes) {
+    result.push({ id: node.id, name: node.name, depth })
+    if (node.children?.length) {
+      result.push(...flattenFolderTree(node.children, depth + 1))
+    }
+  }
+  return result
+}
+
+const flatFolderList = computed(() => flattenFolderTree(articlesStore.folderTree))
 
 // Câmera
 const zoom = ref(1)
@@ -47,6 +66,13 @@ const filteredNodes = computed(() => {
     if (n.type === 'ARTICLE' && !filterArticles.value) return false
     if (n.type === 'QUEST' && !filterQuests.value) return false
     if ((n.type === 'MAP' || n.type === 'PIN') && !filterMaps.value) return false
+    if (
+      selectedFolderFilter.value !== 'ALL' &&
+      n.type === 'ARTICLE' &&
+      n.folder_id !== selectedFolderFilter.value
+    ) {
+      return false
+    }
     return true
   })
 })
@@ -63,6 +89,7 @@ onMounted(async () => {
   if (!worldsStore.activeWorld) {
     await worldsStore.fetchWorlds()
   }
+  await articlesStore.fetchFolderTree()
   await questsStore.fetchWorldGraph()
   initPhysics()
   startAnimation()
@@ -306,6 +333,14 @@ function handleWheel(e: WheelEvent) {
   zoom.value = Math.min(2.5, Math.max(0.4, zoom.value + delta))
 }
 
+function handleDoubleClick(e: MouseEvent) {
+  const coords = getCanvasCoords(e)
+  const node = findNodeAt(coords.x, coords.y)
+  if (node) {
+    navigateToEntity(node)
+  }
+}
+
 function navigateToEntity(node: SimNode) {
   const parts = node.id.split(':')
   const entityType = parts[0]
@@ -330,7 +365,22 @@ function navigateToEntity(node: SimNode) {
         <p class="graph-sub">Visualização interativa das relações de lore, quests e geografia do mundo.</p>
       </div>
 
-      <div class="filter-controls">
+      <div class="filter-controls flex items-center gap-3">
+        <!-- Filtro por Pasta -->
+        <select
+          v-model="selectedFolderFilter"
+          class="px-2 py-1 text-xs bg-stone-900 border border-stone-800 rounded text-stone-300 focus:outline-none focus:border-amber-500/50"
+        >
+          <option value="ALL">Todas as Pastas</option>
+          <option
+            v-for="folder in flatFolderList"
+            :key="folder.id"
+            :value="folder.id"
+          >
+            {{ '—'.repeat(folder.depth) }}{{ folder.depth > 0 ? ' ' : '' }}📁 {{ folder.name }}
+          </option>
+        </select>
+
         <label class="filter-check filter-article">
           <input type="checkbox" v-model="filterArticles" />
           <span>📖 Artigos</span>
@@ -354,6 +404,7 @@ function navigateToEntity(node: SimNode) {
         @mousedown="handleMouseDown"
         @mousemove="handleMouseMove"
         @mouseup="handleMouseUp"
+        @dblclick="handleDoubleClick"
         @wheel="handleWheel"
       ></canvas>
 

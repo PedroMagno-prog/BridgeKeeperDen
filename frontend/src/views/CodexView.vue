@@ -47,7 +47,6 @@ const newTitle = ref('')
 const newVisibility = ref<Visibility>('NULA')
 const newTags = ref('')
 const newInGameDate = ref('')
-const newSections = ref([{ title: '', content: '' }])
 const creating = ref(false)
 
 // ── Editar artigo ────────────────────────────────────────────────────────────
@@ -55,7 +54,6 @@ const editTitle = ref('')
 const editVisibility = ref<Visibility>('NULA')
 const editTags = ref('')
 const editInGameDate = ref('')
-const editSections = ref<{ id?: string; title: string; content: string; image_url?: string | null }[]>([])
 const editInGameSortOrder = ref<number | null>(null)
 const saving = ref(false)
 const uploadingImageIndex = ref<number | null>(null)
@@ -134,11 +132,9 @@ async function handleCreate() {
 
 function resetCreateForm() {
   newTitle.value = ''; newVisibility.value = 'NULA'; newTags.value = ''
-  newInGameDate.value = ''; newSections.value = [{ title: '', content: '' }]
+  newInGameDate.value = ''
   createTargetFolderId.value = null
 }
-
-function addCreateSection() { newSections.value.push({ title: '', content: '' }) }
 
 // ── Editar ───────────────────────────────────────────────────────────────────
 function openEditModal() {
@@ -159,28 +155,6 @@ function openEditModal() {
   showEditModal.value = true
 }
 
-function addEditSection() { editSections.value.push({ title: '', content: '' }) }
-function removeEditSection(i: number) { editSections.value.splice(i, 1) }
-
-async function handleSectionImageUpload(index: number, event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  const a = articlesStore.current
-  const sec = editSections.value[index]
-  if (!file || !a || !sec || !sec.id) return
-
-  uploadingImageIndex.value = index
-  try {
-    const url = await articlesStore.uploadSectionImage(a.id, sec.id, file)
-    if (url && sec) {
-      sec.image_url = url
-      await articlesStore.fetchArticle(a.id)
-    }
-  } catch (err) {
-    alert('Erro ao fazer upload da imagem.')
-  } finally {
-    uploadingImageIndex.value = null
-  }
-}
 
 async function handleSave() {
   const a = articlesStore.current
@@ -188,14 +162,10 @@ async function handleSave() {
   saving.value = true
   try {
     const tags = editTags.value.split(',').map((t) => t.trim()).filter(Boolean)
-    const sections = editSections.value
-      .filter((s) => s.title.trim())
-      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
     await articlesStore.updateArticle(a.id, {
       title: editTitle.value.trim(),
       visibility: editVisibility.value,
       tags,
-      sections,
       in_game_date: editInGameDate.value || null,
       in_game_sort_order: editInGameSortOrder.value,
     } as any)
@@ -411,12 +381,6 @@ function formatDate(iso: string) {
               <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="newTags" type="text" class="form-input" placeholder=".Local, .NPC" /></div>
               <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="newInGameDate" type="text" class="form-input" placeholder="1200 D.C." /></div>
             </div>
-            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
-            <div v-for="(sec, i) in newSections" :key="i" class="section-form">
-              <input v-model="sec.title" type="text" class="form-input" :placeholder="`Título da seção ${i + 1}`" />
-              <WikilinkInput v-model="sec.content" :rows="3" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
-            </div>
-            <button class="btn-link" @click="addCreateSection">+ Seção</button>
             <div class="modal__actions"><button class="btn btn--ghost" @click="showCreateModal = false">Cancelar</button><button class="btn btn--gold" @click="handleCreate" :disabled="creating || !newTitle.trim()">{{ creating ? 'Criando...' : 'Criar' }}</button></div>
           </div>
         </div>
@@ -437,25 +401,6 @@ function formatDate(iso: string) {
               <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="editTags" type="text" class="form-input" /></div>
               <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="editInGameDate" type="text" class="form-input" /></div>
             </div>
-            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
-            <div v-for="(sec, i) in editSections" :key="i" class="section-form">
-              <div class="section-form__header">
-                <input v-model="sec.title" type="text" class="form-input" :placeholder="`Seção ${i + 1}`" />
-                <button class="section-remove" title="Remover seção" @click="removeEditSection(i)">×</button>
-              </div>
-              <WikilinkInput v-model="sec.content" :rows="4" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
-              <div v-if="sec.id" class="section-img-upload">
-                <div v-if="sec.image_url" class="img-preview">
-                  <img :src="sec.image_url" alt="Preview da imagem" class="thumb" />
-                  <span class="img-filename">Imagem anexada</span>
-                </div>
-                <label class="btn-file-upload">
-                  📷 {{ uploadingImageIndex === i ? 'Enviando...' : (sec.image_url ? 'Alterar Imagem (WebP)' : 'Anexar Imagem (WebP)') }}
-                  <input type="file" accept="image/*" class="file-input-hidden" @change="handleSectionImageUpload(i, $event)" />
-                </label>
-              </div>
-            </div>
-            <button class="btn-link" @click="addEditSection">+ Adicionar Seção</button>
             <div class="modal__actions">
               <button class="btn btn--ghost" @click="showEditModal = false">Cancelar</button>
               <button class="btn btn--gold" @click="handleSave" :disabled="saving || !editTitle.trim()">{{ saving ? 'Salvando...' : 'Salvar Alterações' }}</button>

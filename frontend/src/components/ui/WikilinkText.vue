@@ -83,8 +83,8 @@ function handleBrokenClick(targetTitle: string) {
   if (confirm(`O artigo "${targetTitle}" não existe. Deseja criar um novo artigo no Codex com este título?`)) {
     articlesStore.createArticle({
       title: targetTitle,
-      sections: [{ title: 'Visão Geral', content: `Artigo criado a partir do Wikilink [[${targetTitle}]].`, order_index: 0 }] as any,
-    }).then((newArt) => {
+      content: `Artigo criado a partir do Wikilink [[${targetTitle}]].`,
+    } as any).then((newArt) => {
       if (newArt) {
         resolveWikilinks()
         router.push(`/codex/${newArt.id}`)

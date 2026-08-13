@@ -11,6 +11,7 @@ class GraphNode(BaseModel):
     label: str
     type: str  # "ARTICLE" | "QUEST" | "MAP" | "PIN" | "CHAPTER"
     category: str | None = None
+    folder_id: int | None = None
     visibility: VisibilityType
     is_locked: bool = False
 

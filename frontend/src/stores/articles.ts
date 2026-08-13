@@ -190,12 +190,36 @@ export const useArticlesStore = defineStore('articles', () => {
     }
   }
 
+  function expandFolderAncestors(folderId: number | null) {
+    if (!folderId) return
+    const findAndExpand = (folders: FolderTreeNode[], targetId: number): boolean => {
+      for (const f of folders) {
+        if (f.id === targetId) {
+          expandedFolderIds.value.add(f.id)
+          return true
+        }
+        if (f.children && f.children.length > 0) {
+          if (findAndExpand(f.children, targetId)) {
+            expandedFolderIds.value.add(f.id)
+            return true
+          }
+        }
+      }
+      return false
+    }
+    findAndExpand(folderTree.value, folderId)
+    expandedFolderIds.value = new Set(expandedFolderIds.value)
+  }
+
   async function fetchArticle(id: string) {
     const worldId = wid()
     if (!worldId) return
     selectedArticleId.value = id
     const { data } = await api.get<Article>(`/worlds/${worldId}/articles/${id}`)
     current.value = data
+    if (data.folder_id) {
+      expandFolderAncestors(data.folder_id)
+    }
     fetchBacklinks(id)
     return data
   }
@@ -312,7 +336,7 @@ export const useArticlesStore = defineStore('articles', () => {
   return {
     articles, current, currentBacklinks, loading, searchQuery, tagFilter,
     folderTree, rootArticles, expandedFolderIds, selectedArticleId,
-    fetchFolderTree, toggleFolderExpand, expandFolder, createNewFolder, renameFolder, removeFolder,
+    fetchFolderTree, toggleFolderExpand, expandFolder, expandFolderAncestors, createNewFolder, renameFolder, removeFolder,
     moveArticleToFolder, patchArticleContent,
     fetchArticles, fetchArticle, resolveArticle, searchMentions, fetchBacklinks, createArticle, updateArticle, deleteArticle, updateInventory, importObsidianVault,
     fetchPermissions, updatePermissions, uploadSectionImage,
