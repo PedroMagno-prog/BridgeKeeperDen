@@ -49,4 +49,3 @@
 
 ### Domínios do Frontend:
 - `https://bridgekeeperden1.vercel.app`
-- `https://bridgekeeper-phi.vercel.app`
