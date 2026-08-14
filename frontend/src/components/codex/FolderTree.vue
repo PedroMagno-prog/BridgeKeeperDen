@@ -28,82 +28,47 @@ const filteredRootArticles = computed(() => {
   )
 })
 
-function onSelectArticle(articleId: string) {
-  emit('select-article', articleId)
-}
-
-function handleCreateRootFolder() {
-  emit('open-folder-modal', { mode: 'create', parentId: null })
-}
-
-function handleCreateSubfolder(parentId: number) {
-  emit('open-folder-modal', { mode: 'create', parentId })
-}
-
-function handleCreateArticle(folderId?: number | null) {
-  emit('create-article', folderId)
-}
-
+function onSelectArticle(articleId: string) { emit('select-article', articleId) }
+function handleCreateRootFolder() { emit('open-folder-modal', { mode: 'create', parentId: null }) }
+function handleCreateSubfolder(parentId: number) { emit('open-folder-modal', { mode: 'create', parentId }) }
+function handleCreateArticle(folderId?: number | null) { emit('create-article', folderId) }
 function handleRenameFolder(payload: { folderId: number; name: string }) {
-  emit('open-folder-modal', {
-    mode: 'rename',
-    folderId: payload.folderId,
-    initialName: payload.name,
-  })
+  emit('open-folder-modal', { mode: 'rename', folderId: payload.folderId, initialName: payload.name })
 }
-
-async function handleDeleteFolder(folderId: number) {
-  await articlesStore.removeFolder(folderId)
-}
+async function handleDeleteFolder(folderId: number) { await articlesStore.removeFolder(folderId) }
 </script>
 
 <template>
-  <div class="flex flex-col h-full bg-stone-900/90 border-r border-stone-800/80 text-stone-200 select-none">
-    <!-- Top Action Bar -->
-    <div class="p-3 border-b border-stone-800 space-y-2">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xs font-semibold text-stone-400 uppercase tracking-wider flex items-center gap-1.5">
-          <span>📚</span> Codex & Cofre
-        </h2>
-        <div class="flex items-center gap-1">
-          <button
-            @click="handleCreateRootFolder"
-            title="Nova Pasta Raiz"
-            class="p-1 text-xs bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-amber-300 rounded border border-stone-700/60 transition-colors"
-          >
-            📁+
+  <div class="folder-tree-root">
+    <div class="folder-tree-header">
+      <div class="folder-tree-header__top">
+        <h3 class="folder-tree-title">Codex e Cofre</h3>
+        <div class="folder-tree-actions">
+          <button class="tree-btn tree-btn--secondary" title="Nova Pasta Raiz" @click="handleCreateRootFolder">
+            📁+ Pasta
           </button>
-          <button
-            @click="() => handleCreateArticle(null)"
-            title="Novo Artigo Raiz"
-            class="p-1 text-xs bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 rounded border border-amber-500/30 transition-colors"
-          >
-            📄+
+          <button class="tree-btn tree-btn--gold" title="Novo Artigo Raiz" @click="() => handleCreateArticle(null)">
+            📄+ Artigo
           </button>
         </div>
       </div>
-
-      <!-- Quick Filter Input -->
-      <div class="relative">
+      <div class="folder-tree-search">
+        <span class="search-icon">🔍</span>
         <input
           v-model="filterText"
           type="text"
           placeholder="Filtrar por nome..."
-          class="w-full pl-7 pr-3 py-1 text-xs bg-stone-950/80 border border-stone-800 rounded-md text-stone-200 placeholder-stone-500 focus:outline-none focus:border-amber-500/50"
+          class="tree-search-input"
         />
-        <span class="absolute left-2 top-1.5 text-xs text-stone-500">🔍</span>
       </div>
     </div>
 
-    <!-- Tree Content Scroll Area -->
-    <div class="flex-1 overflow-y-auto p-2 space-y-1 custom-scrollbar">
-      <!-- Loading State -->
-      <div v-if="articlesStore.loading" class="p-4 text-center text-xs text-stone-500 animate-pulse">
+    <div class="folder-tree-content">
+      <div v-if="articlesStore.loading" class="tree-loading">
         Carregando estrutura...
       </div>
 
       <template v-else>
-        <!-- Root Folders List -->
         <FolderItem
           v-for="folder in articlesStore.folderTree"
           :key="folder.id"
@@ -117,38 +82,24 @@ async function handleDeleteFolder(folderId: number) {
           @delete-folder="handleDeleteFolder"
         />
 
-        <!-- Root Articles (folder_id === null) -->
-        <div v-if="filteredRootArticles.length > 0" class="pt-2 border-t border-stone-800/40">
-          <div class="px-2 py-1 text-[11px] font-semibold text-stone-500 uppercase tracking-wider">
-            Artigos Raiz
-          </div>
+        <div v-if="filteredRootArticles.length > 0" class="root-articles-section">
+          <div class="root-articles-title">Artigos Raiz</div>
           <div
             v-for="article in filteredRootArticles"
             :key="article.id"
-            class="flex items-center gap-2 py-1 px-2.5 rounded-md text-xs cursor-pointer transition-colors"
-            :class="[
-              activeArticleId === article.id
-                ? 'bg-amber-500/20 text-amber-300 font-medium border-l-2 border-amber-400'
-                : 'text-stone-400 hover:text-stone-200 hover:bg-stone-800/40'
-            ]"
+            class="tree-article-row"
+            :class="{ 'tree-article-row--active': activeArticleId === article.id }"
             @click="onSelectArticle(article.id)"
           >
-            <span class="text-stone-500">📄</span>
-            <span class="truncate flex-1">{{ article.title }}</span>
-            <span v-if="article.visibility === 'NULA'" title="Visão Nula (Mestre)" class="text-xs">🔒</span>
+            <span class="article-icon">📄</span>
+            <span class="article-title">{{ article.title }}</span>
+            <span v-if="article.visibility === 'NULA'" class="article-lock" title="Visão Nula (Mestre)">🔒</span>
           </div>
         </div>
 
-        <!-- Empty State -->
-        <div
-          v-if="articlesStore.folderTree.length === 0 && articlesStore.rootArticles.length === 0"
-          class="p-6 text-center text-xs text-stone-500 space-y-2"
-        >
+        <div v-if="articlesStore.folderTree.length === 0 && articlesStore.rootArticles.length === 0" class="tree-empty">
           <p>Nenhuma pasta ou artigo encontrado.</p>
-          <button
-            @click="handleCreateRootFolder"
-            class="px-3 py-1 bg-stone-800 hover:bg-stone-700 text-amber-400 rounded-md transition-colors"
-          >
+          <button class="tree-btn tree-btn--gold" @click="handleCreateRootFolder">
             Criar Primeira Pasta
           </button>
         </div>
@@ -156,3 +107,198 @@ async function handleDeleteFolder(folderId: number) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.folder-tree-root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  flex: 1 1 0%;
+  background: var(--color-surface, #141720);
+  color: var(--color-text, #e8e4d8);
+  user-select: none;
+  overflow: hidden;
+}
+
+.folder-tree-header {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border, #2e3350);
+  background: var(--color-bg, #0d0f14);
+  flex-shrink: 0;
+}
+
+.folder-tree-header__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.folder-tree-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--color-text-dim, #545e72);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.folder-tree-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tree-btn {
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm, 6px);
+  cursor: pointer;
+  line-height: 1.2;
+  font-family: inherit;
+  transition: all var(--transition-fast, 120ms ease);
+}
+
+.tree-btn--secondary {
+  background: var(--color-surface-2, #1c2030);
+  border: 1px solid var(--color-border, #2e3350);
+  color: var(--color-text-muted, #8892a4);
+}
+.tree-btn--secondary:hover {
+  color: var(--color-gold, #c9a84c);
+  border-color: var(--color-gold-dim, #7a6030);
+  background: var(--color-surface-3, #242840);
+}
+
+.tree-btn--gold {
+  background: var(--color-gold-glow, rgba(201, 168, 76, 0.15));
+  border: 1px solid var(--color-gold-dim, #7a6030);
+  color: var(--color-gold, #c9a84c);
+}
+.tree-btn--gold:hover {
+  background: var(--color-gold, #c9a84c);
+  color: #0d0f14;
+}
+
+.folder-tree-search {
+  position: relative;
+}
+
+.search-icon {
+  position: absolute;
+  left: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 0.7rem;
+  color: var(--color-text-dim, #545e72);
+  pointer-events: none;
+}
+
+.tree-search-input {
+  width: 100%;
+  padding: 5px 10px 5px 26px;
+  font-size: 0.75rem;
+  background: var(--color-surface, #141720);
+  border: 1px solid var(--color-border, #2e3350);
+  border-radius: var(--radius-sm, 6px);
+  color: var(--color-text, #e8e4d8);
+  outline: none;
+  font-family: inherit;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast, 120ms ease);
+}
+
+.tree-search-input:focus {
+  border-color: var(--color-gold, #c9a84c);
+}
+
+.folder-tree-content {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 8px;
+  background: var(--color-surface, #141720);
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border, #2e3350) transparent;
+}
+
+.tree-loading {
+  padding: 16px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-text-dim, #545e72);
+}
+
+.root-articles-section {
+  padding-top: 8px;
+  border-top: 1px solid var(--color-border, #2e3350);
+  margin-top: 6px;
+}
+
+.root-articles-title {
+  padding: 4px 8px;
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--color-text-dim, #545e72);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.tree-article-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm, 6px);
+  font-size: 0.78rem;
+  cursor: pointer;
+  color: var(--color-text-muted, #8892a4);
+  transition: all var(--transition-fast, 120ms ease);
+}
+
+.tree-article-row:hover {
+  background: var(--color-surface-2, #1c2030);
+  color: var(--color-text, #e8e4d8);
+}
+
+.tree-article-row--active {
+  background: var(--color-gold-glow, rgba(201, 168, 76, 0.15)) !important;
+  color: var(--color-gold, #c9a84c) !important;
+  border-left: 2px solid var(--color-gold, #c9a84c);
+  padding-left: 8px;
+}
+
+.article-icon {
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.article-title {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.article-lock {
+  font-size: 0.7rem;
+  flex-shrink: 0;
+}
+
+.tree-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 0.78rem;
+  color: var(--color-text-dim, #545e72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+</style>

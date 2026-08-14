@@ -55,6 +55,7 @@ async def gerar_grafo_do_mundo(
                 label=art.title,
                 type="ARTICLE",
                 category=tag_str,
+                folder_id=art.folder_id,
                 visibility=art.visibility,
                 is_locked=is_locked,
             )

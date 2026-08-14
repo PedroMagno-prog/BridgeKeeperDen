@@ -28,6 +28,7 @@ const showObsidianModal = ref(false)
 const showPermModal = ref(false)
 const showDetail = ref(false)
 const showTagFilters = ref(true)
+const isSidebarCollapsed = ref(false)
 
 // Gestão de Pastas (Etapa 10)
 const activeViewTab = ref<'tree' | 'flat'>('tree')
@@ -47,7 +48,6 @@ const newTitle = ref('')
 const newVisibility = ref<Visibility>('NULA')
 const newTags = ref('')
 const newInGameDate = ref('')
-const newSections = ref([{ title: '', content: '' }])
 const creating = ref(false)
 
 // ── Editar artigo ────────────────────────────────────────────────────────────
@@ -55,7 +55,6 @@ const editTitle = ref('')
 const editVisibility = ref<Visibility>('NULA')
 const editTags = ref('')
 const editInGameDate = ref('')
-const editSections = ref<{ id?: string; title: string; content: string; image_url?: string | null }[]>([])
 const editInGameSortOrder = ref<number | null>(null)
 const saving = ref(false)
 const uploadingImageIndex = ref<number | null>(null)
@@ -116,15 +115,12 @@ async function handleCreate() {
   creating.value = true
   try {
     const tags = newTags.value.split(',').map((t) => t.trim()).filter(Boolean)
-    const sections = newSections.value
-      .filter((s) => s.title.trim())
-      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
     await articlesStore.createArticle({
       title: newTitle.value.trim(),
       folder_id: createTargetFolderId.value || null,
       visibility: newVisibility.value,
       tags,
-      sections,
+      content: '',
       in_game_date: newInGameDate.value || null,
     } as any)
     showCreateModal.value = false
@@ -134,11 +130,9 @@ async function handleCreate() {
 
 function resetCreateForm() {
   newTitle.value = ''; newVisibility.value = 'NULA'; newTags.value = ''
-  newInGameDate.value = ''; newSections.value = [{ title: '', content: '' }]
+  newInGameDate.value = ''
   createTargetFolderId.value = null
 }
-
-function addCreateSection() { newSections.value.push({ title: '', content: '' }) }
 
 // ── Editar ───────────────────────────────────────────────────────────────────
 function openEditModal() {
@@ -149,38 +143,9 @@ function openEditModal() {
   editTags.value = a.tags?.join(', ') ?? ''
   editInGameDate.value = a.in_game_date ?? ''
   editInGameSortOrder.value = a.in_game_sort_order ?? null
-  editSections.value = (a.sections ?? []).map((s) => ({
-    id: s.id,
-    title: s.title,
-    content: s.content,
-    image_url: s.image_url,
-  }))
-  if (editSections.value.length === 0) editSections.value.push({ title: '', content: '' })
   showEditModal.value = true
 }
 
-function addEditSection() { editSections.value.push({ title: '', content: '' }) }
-function removeEditSection(i: number) { editSections.value.splice(i, 1) }
-
-async function handleSectionImageUpload(index: number, event: Event) {
-  const file = (event.target as HTMLInputElement).files?.[0]
-  const a = articlesStore.current
-  const sec = editSections.value[index]
-  if (!file || !a || !sec || !sec.id) return
-
-  uploadingImageIndex.value = index
-  try {
-    const url = await articlesStore.uploadSectionImage(a.id, sec.id, file)
-    if (url && sec) {
-      sec.image_url = url
-      await articlesStore.fetchArticle(a.id)
-    }
-  } catch (err) {
-    alert('Erro ao fazer upload da imagem.')
-  } finally {
-    uploadingImageIndex.value = null
-  }
-}
 
 async function handleSave() {
   const a = articlesStore.current
@@ -188,14 +153,10 @@ async function handleSave() {
   saving.value = true
   try {
     const tags = editTags.value.split(',').map((t) => t.trim()).filter(Boolean)
-    const sections = editSections.value
-      .filter((s) => s.title.trim())
-      .map((s, i) => ({ title: s.title, content: s.content, order_index: i }))
     await articlesStore.updateArticle(a.id, {
       title: editTitle.value.trim(),
       visibility: editVisibility.value,
       tags,
-      sections,
       in_game_date: editInGameDate.value || null,
       in_game_sort_order: editInGameSortOrder.value,
     } as any)
@@ -222,23 +183,23 @@ function formatDate(iso: string) {
 </script>
 
 <template>
-  <div class="codex" :class="{ 'codex--detail-open': showDetail }">
+  <div class="codex" :class="{ 'codex--detail-open': showDetail, 'codex--sidebar-collapsed': isSidebarCollapsed }">
     <!-- ═══ LISTA / ÁRVORE DE ARTIGOS ═══ -->
-    <div class="codex__list">
-      <div class="codex__toolbar flex items-center justify-between gap-2 p-3 border-b border-stone-800">
-        <div class="flex items-center gap-2">
-          <h2 class="codex__title text-base font-bold text-stone-200">Codex</h2>
-          <div class="flex items-center bg-stone-950 border border-stone-800 rounded-lg p-0.5 text-xs">
+    <div v-show="!isSidebarCollapsed" class="codex__list">
+      <div class="codex__toolbar">
+        <div class="codex__toolbar-title-group">
+          <h2 class="codex__title">Codex</h2>
+          <div class="view-tab-switch">
             <button
-              class="px-2 py-0.5 rounded transition-colors"
-              :class="activeViewTab === 'tree' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-stone-400 hover:text-stone-200'"
+              class="view-tab-btn"
+              :class="{ 'view-tab-btn--active': activeViewTab === 'tree' }"
               @click="activeViewTab = 'tree'"
             >
               📁 Árvore
             </button>
             <button
-              class="px-2 py-0.5 rounded transition-colors"
-              :class="activeViewTab === 'flat' ? 'bg-amber-500/20 text-amber-300 font-semibold' : 'text-stone-400 hover:text-stone-200'"
+              class="view-tab-btn"
+              :class="{ 'view-tab-btn--active': activeViewTab === 'flat' }"
               @click="activeViewTab = 'flat'"
             >
               📋 Lista
@@ -246,18 +207,29 @@ function formatDate(iso: string) {
           </div>
         </div>
 
-        <div v-if="isMestre" class="toolbar-btns flex items-center gap-1.5">
-          <button class="btn-ghost-sm text-xs" title="Importar Cofre Obsidian (.zip)" @click="showObsidianModal = true">
+        <div class="toolbar-btns">
+          <button v-if="isMestre" class="btn-ghost-sm" title="Importar Cofre Obsidian (.zip)" @click="showObsidianModal = true">
             📥 Importar
           </button>
-          <button class="btn-gold-sm text-xs" @click="handleCreateArticleInFolder(null)">
+          <button v-if="isMestre" class="btn-gold-sm" @click="handleCreateArticleInFolder(null)">
             + Novo
+          </button>
+          <button
+            v-if="showDetail"
+            class="btn-icon-sm"
+            title="Recolher Painel Lateral"
+            @click="isSidebarCollapsed = true"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="11 17 6 12 11 7"/>
+              <polyline points="18 17 13 12 18 7"/>
+            </svg>
           </button>
         </div>
       </div>
 
       <!-- MODO ÁRVORE DE PASTAS (Etapa 10) -->
-      <div v-if="activeViewTab === 'tree'" class="flex-1 overflow-hidden">
+      <div v-if="activeViewTab === 'tree'" class="codex__tree-container">
         <FolderTree
           :active-article-id="articlesStore.current?.id"
           @select-article="openArticle"
@@ -267,7 +239,7 @@ function formatDate(iso: string) {
       </div>
 
       <!-- MODO LISTA SIMPLES / BUSCA FLAT -->
-      <div v-else class="flex-1 flex flex-col overflow-hidden">
+      <div v-else class="codex__flat-container">
         <div class="search-bar">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input v-model="searchInput" type="text" placeholder="Buscar artigos..." class="search-bar__input" @keydown.enter="search" />
@@ -313,8 +285,20 @@ function formatDate(iso: string) {
     <Transition name="slide-right">
       <div v-if="showDetail && articlesStore.current" class="codex__detail">
         <div class="detail-header">
-          <button class="back-btn" @click="backToList">
+          <button class="back-btn" title="Voltar à lista" @click="backToList">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+          </button>
+          <button
+            v-if="isSidebarCollapsed"
+            class="btn-ghost-sm flex items-center gap-1.5"
+            title="Expandir Árvore / Lista de Artigos"
+            @click="isSidebarCollapsed = false"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="13 17 18 12 13 7"/>
+              <polyline points="6 17 11 12 6 7"/>
+            </svg>
+            <span>📁 Painel</span>
           </button>
           <h1 class="detail-title">{{ articlesStore.current.title }}</h1>
           <div class="detail-actions">
@@ -349,7 +333,7 @@ function formatDate(iso: string) {
         </div>
 
         <!-- Unified Markdown Live Preview Editor (Etapa 11) -->
-        <div class="detail-sections mt-4 min-h-[500px] h-[calc(100vh-280px)]">
+        <div class="detail-sections mt-4 flex-1 min-h-[550px] h-[calc(100vh-230px)]">
           <ArticleEditor
             :key="articlesStore.current.id"
             :article-id="articlesStore.current.id"
@@ -411,12 +395,6 @@ function formatDate(iso: string) {
               <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="newTags" type="text" class="form-input" placeholder=".Local, .NPC" /></div>
               <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="newInGameDate" type="text" class="form-input" placeholder="1200 D.C." /></div>
             </div>
-            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
-            <div v-for="(sec, i) in newSections" :key="i" class="section-form">
-              <input v-model="sec.title" type="text" class="form-input" :placeholder="`Título da seção ${i + 1}`" />
-              <WikilinkInput v-model="sec.content" :rows="3" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
-            </div>
-            <button class="btn-link" @click="addCreateSection">+ Seção</button>
             <div class="modal__actions"><button class="btn btn--ghost" @click="showCreateModal = false">Cancelar</button><button class="btn btn--gold" @click="handleCreate" :disabled="creating || !newTitle.trim()">{{ creating ? 'Criando...' : 'Criar' }}</button></div>
           </div>
         </div>
@@ -437,25 +415,6 @@ function formatDate(iso: string) {
               <div class="form-group form-group--flex"><label>Tags (vírgula)</label><input v-model="editTags" type="text" class="form-input" /></div>
               <div class="form-group" style="width:160px;"><label>Data In-Game</label><input v-model="editInGameDate" type="text" class="form-input" /></div>
             </div>
-            <div class="ornament-divider" style="margin:0.75rem 0;">Seções</div>
-            <div v-for="(sec, i) in editSections" :key="i" class="section-form">
-              <div class="section-form__header">
-                <input v-model="sec.title" type="text" class="form-input" :placeholder="`Seção ${i + 1}`" />
-                <button class="section-remove" title="Remover seção" @click="removeEditSection(i)">×</button>
-              </div>
-              <WikilinkInput v-model="sec.content" :rows="4" placeholder="Conteúdo da seção... Digite [[ para autocomplete de artigos." />
-              <div v-if="sec.id" class="section-img-upload">
-                <div v-if="sec.image_url" class="img-preview">
-                  <img :src="sec.image_url" alt="Preview da imagem" class="thumb" />
-                  <span class="img-filename">Imagem anexada</span>
-                </div>
-                <label class="btn-file-upload">
-                  📷 {{ uploadingImageIndex === i ? 'Enviando...' : (sec.image_url ? 'Alterar Imagem (WebP)' : 'Anexar Imagem (WebP)') }}
-                  <input type="file" accept="image/*" class="file-input-hidden" @change="handleSectionImageUpload(i, $event)" />
-                </label>
-              </div>
-            </div>
-            <button class="btn-link" @click="addEditSection">+ Adicionar Seção</button>
             <div class="modal__actions">
               <button class="btn btn--ghost" @click="showEditModal = false">Cancelar</button>
               <button class="btn btn--gold" @click="handleSave" :disabled="saving || !editTitle.trim()">{{ saving ? 'Salvando...' : 'Salvar Alterações' }}</button>
@@ -637,18 +596,125 @@ function formatDate(iso: string) {
   padding: var(--space-2) 0;
 }
 
-.codex { display: flex; gap: 0; height: calc(100vh - 56px); margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-8)); }
+.codex {
+  display: flex;
+  gap: 0;
+  height: calc(100vh - 56px);
+  max-height: calc(100vh - 56px);
+  margin: calc(-1 * var(--space-6)) calc(-1 * var(--space-8));
+  overflow: hidden;
+  background: var(--color-bg);
+}
 
 /* Lista */
-.codex__list { width: 380px; min-width: 300px; border-right: 1px solid var(--color-border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+.codex__list {
+  width: 380px;
+  min-width: 300px;
+  border-right: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  max-height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--color-surface);
+}
 .codex--detail-open .codex__list { width: 340px; }
-.codex__toolbar { display: flex; align-items: center; justify-content: space-between; padding: var(--space-4); border-bottom: 1px solid var(--color-border); }
-.codex__title { font-family: var(--font-display); font-size: 1.1rem; color: var(--color-gold); }
+
+.codex__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  flex-shrink: 0;
+  gap: var(--space-2);
+}
+
+.codex__toolbar-title-group {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.codex__title {
+  font-family: var(--font-display);
+  font-size: 1.1rem;
+  color: var(--color-gold);
+  margin: 0;
+}
+
+.view-tab-switch {
+  display: flex;
+  align-items: center;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px;
+  gap: 2px;
+}
+
+.view-tab-btn {
+  padding: 3px 8px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  font-family: var(--font-body);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.view-tab-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+.view-tab-btn--active {
+  background: var(--color-gold-glow);
+  color: var(--color-gold);
+  font-weight: 600;
+}
+
+.codex__tree-container,
+.codex__flat-container {
+  flex: 1 1 0%;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--color-surface);
+}
 
 .toolbar-btns {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+.btn-icon-sm {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-2);
+  color: var(--color-text-dim);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.btn-icon-sm:hover {
+  border-color: var(--color-gold);
+  color: var(--color-gold);
 }
 
 .btn-ghost-sm {
@@ -680,7 +746,7 @@ function formatDate(iso: string) {
 .tag-pill:hover { border-color: var(--color-gold-dim); color: var(--color-gold); }
 .tag-pill--active { background: var(--color-gold-glow); border-color: var(--color-gold-dim); color: var(--color-gold); }
 
-.article-list { flex: 1; overflow-y: auto; }
+.article-list { flex: 1 1 0%; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; scrollbar-color: #2e3350 transparent; }
 .article-row { display: flex; flex-direction: column; gap: var(--space-1); width: 100%; padding: var(--space-3) var(--space-4); border: none; border-bottom: 1px solid var(--color-border); background: none; cursor: pointer; text-align: left; font-family: var(--font-body); color: var(--color-text); transition: background var(--transition-fast); }
 .article-row:hover { background: var(--color-surface); }
 .article-row--active { background: var(--color-surface-2); border-left: 3px solid var(--color-gold); }
@@ -694,7 +760,7 @@ function formatDate(iso: string) {
 .tag-inline--lg { font-size: 0.7rem; padding: 2px 8px; }
 
 /* Detail */
-.codex__detail { flex: 1; overflow-y: auto; padding: var(--space-6) var(--space-8); animation: slideIn 0.25s ease; }
+.codex__detail { flex: 1 1 0%; min-height: 0; overflow-y: auto; padding: var(--space-6) var(--space-8); animation: slideIn 0.25s ease; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(12px); } to { opacity: 1; transform: translateX(0); } }
 .detail-header { display: flex; align-items: center; gap: var(--space-3); margin-bottom: var(--space-4); }
 .back-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: var(--radius-sm); border: 1px solid var(--color-border); background: none; color: var(--color-text-muted); cursor: pointer; transition: all var(--transition-fast); }
