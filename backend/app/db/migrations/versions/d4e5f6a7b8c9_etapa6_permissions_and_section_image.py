@@ -19,19 +19,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    # 1. Adicionar valor 'CONTROLADO' ao enum postgresql visibility_type (se não existir)
-    op.execute(sa.text("""
-        DO $$
-        BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM pg_type t 
-                JOIN pg_enum e ON t.oid = e.enumtypid 
-                WHERE t.typname = 'visibility_type' AND e.enumlabel = 'CONTROLADO'
-            ) THEN
-                ALTER TYPE visibility_type ADD VALUE 'CONTROLADO';
-            END IF;
-        END $$;
-    """))
+    # 1. Adicionar valor 'CONTROLADO' ao enum visibility_type (se não existir)
+    bind = op.get_bind()
+    has_controlado = bind.execute(sa.text("""
+        SELECT EXISTS (
+            SELECT 1 FROM pg_type t 
+            JOIN pg_enum e ON t.oid = e.enumtypid 
+            WHERE t.typname = 'visibility_type' AND e.enumlabel = 'CONTROLADO'
+        )
+    """)).scalar()
+
+    if not has_controlado:
+        op.execute(sa.text("ALTER TYPE visibility_type ADD VALUE 'CONTROLADO'"))
 
     # 2. Adicionar coluna image_url em article_sections
     op.add_column('article_sections', sa.Column('image_url', sa.String(length=500), nullable=True))

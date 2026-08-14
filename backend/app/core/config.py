@@ -1,4 +1,4 @@
-﻿import json
+import json
 from typing import List, Optional, Union
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -7,13 +7,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Aplicacao
+    # ── Aplicação ──────────────────────────────────────────────────────────────
     APP_NAME: str = "BridgeKeeper Den"
     APP_ENV: str = "development"
     DEBUG: bool = True
     SECRET_KEY: str = "change-me-in-production"
 
-    # API
+    # ── API ────────────────────────────────────────────────────────────────────
     API_V1_STR: str = "/api/v1"
     BACKEND_CORS_ORIGINS: Union[List[str], str] = [
         "http://localhost:5173",
@@ -23,12 +23,6 @@ class Settings(BaseSettings):
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        """
-        Aceita a variavel de ambiente como:
-        - lista JSON:  '["https://foo.vercel.app","https://bar.com"]'
-        - CSV:         'https://foo.vercel.app,https://bar.com'
-        - lista nativa do Python (passada programaticamente)
-        """
         if isinstance(v, str):
             v_str = v.strip()
             if v_str.startswith("[") and v_str.endswith("]"):
@@ -43,28 +37,28 @@ class Settings(BaseSettings):
             return [str(origin).strip().rstrip("/") for origin in v if origin]
         return v
 
-    # Auth / JWT
+    # ── Auth / JWT ─────────────────────────────────────────────────────────────
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24  # 24 horas
 
-    # Banco de dados: partes individuais (desenvolvimento local)
+    # ── Banco de dados: partes individuais (desenvolvimento local) ─────────────
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_DB: str = "bridgekeeper"
 
-    # Banco de dados: URL completa opcional (nuvem)
-    # Se DATABASE_URL for fornecida (ex: Neon, Supabase, Render, CockroachDB),
-    # ela tem prioridade. O prefixo e sanitizado automaticamente para o driver
-    # async correto. CockroachDB usa cockroachdb+asyncpg://.
+    # ── Banco de dados: URL completa opcional (nuvem) ──────────────────────────
+    # Se DATABASE_URL for fornecida (ex: Neon, Supabase, Render, CockroachDB), ela tem
+    # prioridade. O prefixo é sanitizado automaticamente para o driver async correto.
     DATABASE_URL: Optional[str] = None
 
     @model_validator(mode="after")
     def _resolve_database_url(self) -> "Settings":
         if self.DATABASE_URL:
             url = str(self.DATABASE_URL).strip()
-
+            
+            # Se a string veio vazia ou com espaços
             if not url:
                 self.DATABASE_URL = (
                     f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
@@ -72,10 +66,10 @@ class Settings(BaseSettings):
                 )
                 return self
 
-            # Identifica se a conexao e com cluster CockroachDB
+            # Identifica se a conexão é com cluster CockroachDB
             is_cockroach = (
-                "cockroach" in url.lower()
-                or ":26257" in url
+                "cockroach" in url.lower() 
+                or ":26257" in url 
                 or url.startswith("cockroachdb")
             )
 
@@ -91,7 +85,7 @@ class Settings(BaseSettings):
                     url = url[len(old_prefix):]
                     break
 
-            # Converte sslmode= para ssl= (exigencia do driver asyncpg)
+            # Converte sslmode= para ssl= (exigência do driver asyncpg)
             if "sslmode=" in url:
                 url = url.replace("sslmode=", "ssl=")
 
